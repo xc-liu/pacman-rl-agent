@@ -16,81 +16,112 @@ from captureAgents import CaptureAgent
 import random, time, util
 from game import Directions
 import game
+from PPO import PPO
 
 #################
 # Team creation #
 #################
 
+first_index = None  # Index of first player
+second_index = None  # Index of second player
+ppo_network = PPO()
+current_actions = [-1, -1]  # Actions to be executed
+temp_actions = [-1, -1]  # Actions in case of illegal movements
+current_state = None
+illegal_reward = None  # Reward in case of illegal movement
+actions_idx = {'North': 0, 'South': 1, 'East': 2, 'West': 3, 'Stop': 4}
+idx_actions = {0: 'North', 1: 'South', 2: 'East', 3: 'West', 4: 'Stop'}
+first_to_act = None
+
+
 def createTeam(firstIndex, secondIndex, isRed,
-               first = 'DummyAgent', second = 'DummyAgent'):
-  """
-  This function should return a list of two agents that will form the
-  team, initialized using firstIndex and secondIndex as their agent
-  index numbers.  isRed is True if the red team is being created, and
-  will be False if the blue team is being created.
+               first='DummyAgent', second='DummyAgent'):
+    global first_index, second_index
+    """
+    This function should return a list of two agents that will form the
+    team, initialized using firstIndex and secondIndex as their agent
+    index numbers.  isRed is True if the red team is being created, and
+    will be False if the blue team is being created.
 
-  As a potentially helpful development aid, this function can take
-  additional string-valued keyword arguments ("first" and "second" are
-  such arguments in the case of this function), which will come from
-  the --redOpts and --blueOpts command-line arguments to capture.py.
-  For the nightly contest, however, your team will be created without
-  any extra arguments, so you should make sure that the default
-  behavior is what you want for the nightly contest.
-  """
+    As a potentially helpful development aid, this function can take
+    additional string-valued keyword arguments ("first" and "second" are
+    such arguments in the case of this function), which will come from
+    the --redOpts and --blueOpts command-line arguments to capture.py.
+    For the nightly contest, however, your team will be created without
+    any extra arguments, so you should make sure that the default
+    behavior is what you want for the nightly contest.
+    """
 
-  # The following line is an example only; feel free to change it.
-  return [eval(first)(firstIndex), eval(second)(secondIndex)]
+    # The following line is an example only; feel free to change it.
+    first_index = firstIndex
+    second_index = secondIndex
+    return [eval(first)(firstIndex), eval(second)(secondIndex)]
+
 
 ##########
 # Agents #
 ##########
 
 class DummyAgent(CaptureAgent):
-  """
-  A Dummy agent to serve as an example of the necessary agent structure.
-  You should look at baselineTeam.py for more details about how to
-  create an agent as this is the bare minimum.
-  """
-
-  def registerInitialState(self, gameState):
+    agent_index = None
     """
-    This method handles the initial setup of the
-    agent to populate useful fields (such as what team
-    we're on).
-
-    A distanceCalculator instance caches the maze distances
-    between each pair of positions, so your agents can use:
-    self.distancer.getDistance(p1, p2)
-
-    IMPORTANT: This method may run for at most 15 seconds.
+    A Dummy agent to serve as an example of the necessary agent structure.
+    You should look at baselineTeam.py for more details about how to
+    create an agent as this is the bare minimum.
     """
 
-    '''
-    Make sure you do not delete the following line. If you would like to
-    use Manhattan distances instead of maze distances in order to save
-    on initialization time, please take a look at
-    CaptureAgent.registerInitialState in captureAgents.py.
-    '''
-    CaptureAgent.registerInitialState(self, gameState)
-    food_red = gameState.getRedFood()
+    def registerInitialState(self, gameState):
+        """
+        This method handles the initial setup of the
+        agent to populate useful fields (such as what team
+        we're on).
 
+        A distanceCalculator instance caches the maze distances
+        between each pair of positions, so your agents can use:
+        self.distancer.getDistance(p1, p2)
 
-    '''
-    Your initialization code goes here, if you need any.
-    '''
+        IMPORTANT: This method may run for at most 15 seconds.
+        """
 
+        '''
+        Make sure you do not delete the following line. If you would like to
+        use Manhattan distances instead of maze distances in order to save
+        on initialization time, please take a look at
+        CaptureAgent.registerInitialState in captureAgents.py.
+        '''
+        CaptureAgent.registerInitialState(self, gameState)
+        if self.index == first_index:
+            self.agent_index = 0
+        else:
+            self.agent_index = 1
 
-  def chooseAction(self, gameState):
-    """
-    Picks among actions randomly.
-    """
-    actions = gameState.getLegalActions(self.index)
+    def chooseAction(self, gameState):
+        global current_actions, temp_actions, illegal_reward, first_to_act, current_state
 
-    '''
-    You should change this in your own agent.
-    '''
-    opponents = gameState.getAgentDistances()
-    print(opponents)
+        if first_to_act is None: first_to_act = self.index  # First agent to act during the whole game
 
-    return random.choice(actions)
+        if self.index == first_to_act:
+            legal_actions_1 = gameState.getLegalActions(first_index)
+            legal_actions_2 = gameState.getLegalActions(second_index)
+            legal_actions_1 = [actions_idx[a] for a in legal_actions_1]
+            legal_actions_2 = [actions_idx[a] for a in legal_actions_2]
+            current_state = ppo_network.process_state(gameState)
+            current_actions, illegal_reward, illegal_idx = ppo_network.compute_action(current_state, legal_actions_1,
+                                                                                      legal_actions_2)
+            if illegal_reward is not None:  # There is an illegal movement
+                if illegal_idx is not None:  # Just one of them is illegal
+                    temp_actions = current_actions
+                    temp_actions[illegal_idx] = 4
+                else:
+                    temp_actions = [4, 4]
+        else:
+            reward = 0  # TODO - Compute reward
+            if illegal_reward is not None:
+                reward -= illegal_reward
+            ppo_network.store_experience(current_state, current_actions[0], current_actions[1], reward,
+                                         gameState.isOver())
 
+        if illegal_reward is not None:  # There has been an illegal movement
+            if self.index is not first_to_act: illegal_reward = None  # Last movement to be executed
+            return idx_actions[temp_actions[self.agent_index]]
+        return idx_actions[current_actions[self.agent_index]]
