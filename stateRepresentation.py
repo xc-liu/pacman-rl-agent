@@ -97,7 +97,7 @@ class stateRepresentation:
                                     if 0 <= i + p < h and 0 <= j + q < w]
                     for p in possible_pos:
                         if self.digital_state[0][h - 1 - p[0]][p[1]] == 0:
-                            if self.agent.distancer.getDistance((pos[1], pos[0]), (p[1], p[0])) <= steps:
+                            if self.agent.getMazeDistance((pos[1], pos[0]), (p[1], p[0])) <= steps:
                                 self.next_pos[(pos[1], pos[0])].append((p[1], p[0]))
 
     def update_state(self, gameState):
@@ -112,8 +112,8 @@ class stateRepresentation:
         b_food = gameState.getBlueFood()
         r_capsule = gameState.getRedCapsules()
         b_capsule = gameState.getBlueCapsules()
-        my_prev_food = np.copy(self.digital_state[1:, :, :int(width / 2)])
-        my_prev_capsule = np.copy(self.digital_state[2:, :, :int(width / 2)])
+        my_prev_food = np.copy(self.digital_state[1, :, :int(width / 2)])
+        my_prev_capsule = np.copy(self.digital_state[2, :, :int(width / 2)])
         self.digital_state[1:, :, :] = 0
 
         # update food
@@ -130,9 +130,9 @@ class stateRepresentation:
                     self.digital_state[1][i][j] = 1
 
         # if the current food layer is different from the previous one, update the previous position of the enemy
-        my_food_change = my_prev_food - self.digital_state[1:, :, :int(width / 2)]
+        my_food_change = my_prev_food - self.digital_state[1, :, :int(width / 2)]
         change_food = np.nonzero(my_food_change)
-        change_pos = [(a, b) for a in change_food[0] for b in change_food[1]]
+        change_pos = [(b, height - a - 1) for a in change_food[0] for b in change_food[1]]
 
         # update capsule
         if self.red:
@@ -144,9 +144,9 @@ class stateRepresentation:
             if len(b_capsule) > 0:
                 self.digital_state[2][b_capsule[0][1]][width - 1 - b_capsule[0][0]] = 1
 
-        my_capsule_change = my_prev_capsule - self.digital_state[2:, :, :int(width / 2)]
+        my_capsule_change = my_prev_capsule - self.digital_state[2, :, :int(width / 2)]
         change_capsule = np.nonzero(my_capsule_change)
-        change_pos += [(a, b) for a in change_capsule[0] for b in change_capsule[1]]
+        change_pos += [(b, height - a - 1) for a in change_capsule[0] for b in change_capsule[1]]
 
         # update player states
         for idx in self.agent.getTeam(gameState) + self.agent.getOpponents(gameState):
@@ -166,54 +166,57 @@ class stateRepresentation:
                 idx = idx + 1
 
             if enemy:
-                print(len(change_pos))
-                changed = False
-                if len(change_pos) == 1:
-                    indices = list(self.last_enemy_pos.keys())
-                    distance_to_food = [self.agent.distancer.getDistance(change_pos, p)
-                                        for p in self.last_enemy_pos.values()]
-                    if distance_to_food[indices.index(idx)] == min(distance_to_food):
-                        pos = change_pos
+
+                if pos is not None:
+                    myPos = gameState.getAgentState(self.index).getPosition()
+                    self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
+                    # self.dist_history[idx] = [self.agent.distancer.getDistance(myPos, pos)]
+                    self.last_enemy_pos[idx] = pos
+                else:
+                    changed = False
+                    if len(change_pos) == 1:
+                        indices = list(self.last_enemy_pos.keys())
+                        distance_to_food = [self.agent.distancer.getDistance(change_pos[0], p)
+                                            for p in self.last_enemy_pos.values()]
+                        if distance_to_food[indices.index(idx)] == min(distance_to_food):
+                            pos = change_pos[0]
+                            changed = True
+                            myPos = gameState.getAgentState(self.index).getPosition()
+                            # self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
+                            self.dist_history[idx] = [self.agent.distancer.getDistance(myPos, pos)]
+                            self.last_enemy_pos[idx] = pos
+
+                    elif len(change_pos) == 2:
+                        indices = list(self.last_enemy_pos.keys())
+                        cost1 = self.agent.distancer.getDistance(self.last_enemy_pos[indices[0]], change_pos[0]) \
+                                + self.agent.distancer.getDistance(self.last_enemy_pos[indices[1]], change_pos[1])
+                        cost2 = self.agent.distancer.getDistance(self.last_enemy_pos[indices[0]], change_pos[1]) \
+                                + self.agent.distancer.getDistance(self.last_enemy_pos[indices[1]], change_pos[0])
+                        if cost1 < cost2:
+                            corresponding_pos = {0: 0, 1: 1}
+                        else:
+                            corresponding_pos = {0: 1, 1: 0}
+                        pos = change_pos[corresponding_pos[indices.index(idx)]]
                         changed = True
                         myPos = gameState.getAgentState(self.index).getPosition()
                         self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
+                        # self.dist_history[idx] = [self.agent.distancer.getDistance(myPos, pos)]
                         self.last_enemy_pos[idx] = pos
 
-                elif len(change_pos) == 2:
-                    indices = list(self.last_enemy_pos.keys())
-                    cost1 = self.agent.distancer.getDistance(self.last_enemy_pos[indices[0]], change_pos[0]) \
-                            + self.agent.distancer.getDistance(self.last_enemy_pos[indices[1]], change_pos[1])
-                    cost2 = self.agent.distancer.getDistance(self.last_enemy_pos[indices[0]], change_pos[1]) \
-                            + self.agent.distancer.getDistance(self.last_enemy_pos[indices[1]], change_pos[0])
-                    if cost1 < cost2:
-                        corresponding_pos = {0: 0, 1: 1}
-                    else:
-                        corresponding_pos = {0: 1, 1: 0}
-                    pos = change_pos[corresponding_pos[indices.index(idx)]]
-                    changed = True
-                    myPos = gameState.getAgentState(self.index).getPosition()
-                    self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
-                    self.last_enemy_pos[idx] = pos
-
-                if not changed:
-                    if pos is None:
+                    if not changed:
                         pos = self.computeOpponentPosition(idx, original_idx)
-                    else:
-                        myPos = gameState.getAgentState(self.index).getPosition()
-                        self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
-                        self.last_enemy_pos[idx] = pos
 
             if not self.red:
                 pos = [width - 1 - pos[0], height - 1 - pos[1]]
 
-            if self.digital_state[3][height - int(pos[1])][int(pos[0])] == 0:
-                self.digital_state[3][height - int(pos[1])][int(pos[0])] = idx
+            if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
+                self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             else:
-                self.digital_state[3][height - int(pos[1])][int(pos[0])] += idx + 1
+                self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
 
             # digital_state[4][height - int(pos[1])][int(pos[0])] = actions_idx[direction]
-            self.digital_state[4][height - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
-            self.digital_state[5][height - int(pos[1])][int(pos[0])] += scared_timer
+            self.digital_state[4][height - 1 - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
+            self.digital_state[5][height - 1 - int(pos[1])][int(pos[0])] += scared_timer
 
         return self.digital_state
 
@@ -222,10 +225,11 @@ class stateRepresentation:
 
         # use Kalman filter to correct the noisy distance
         self.dist_history[idx].append(noisy_dist)
-        corrected_dist = np.clip(kalman(self.dist_history[idx], 0.05, 0.01), a_min=5, a_max=None)
+        corrected_dist = np.clip(kalman(self.dist_history[idx], 0.01, 0.01), a_min=5, a_max=None)
+        # corrected_dist = noisy_dist
 
         # sample around the last enemy state, find the one with closest distance to corrected_dist
-        possible_enemy_pos = self.next_pos[self.last_enemy_pos[idx]]
+        possible_enemy_pos = self.next_pos[(int(self.last_enemy_pos[idx][0]), int(self.last_enemy_pos[idx][1]))]
         possible_distances = []
         myPos = self.gameState.getAgentState(self.index).getPosition()
         for p in possible_enemy_pos:
@@ -238,17 +242,46 @@ class stateRepresentation:
 
     def visualise_state(self):
         st = ""
+        food_carrying = {}
+        scared = {}
         for i in range(len(self.digital_state[0])):
             for j in range(len(self.digital_state[0][0])):
-                if self.digital_state[0][i][j] == 1:
-                    st += "%"
+
+                if self.digital_state[3][i][j] != 0:
+                    st += str(int(self.digital_state[3][i][j]))
+                    if self.digital_state[4][i][j] != 0:
+                        food_carrying[int(self.digital_state[3][i][j])] = self.digital_state[4][i][j]
+                    if self.digital_state[5][i][j] != 0:
+                        scared[int(self.digital_state[3][i][j])] = self.digital_state[5][i][j]
+                elif self.digital_state[0][i][j] == 1:
+                        st += "%"
                 elif self.digital_state[1][i][j] == 1:
                     st += "."
                 elif self.digital_state[2][i][j] == 1:
                     st += "o"
-                elif self.digital_state[3][i][j] != 0:
-                    st += str(int(self.digital_state[3][i][j]))
                 else:
                     st += " "
+            st += "\n"
+        st = st[:-1]
+
+        info = "Time left %s, score %s. " % (self.time_left, self.score)
+        if bool(food_carrying):
+            info += "Food carrying: "
+            for k in food_carrying.keys():
+                info += "%d - %d " % (k, food_carrying[k])
+        if bool(scared):
+            info += "Scared timer: "
+            for k in scared.keys():
+                info += "%d - %d " % (k, scared[k])
+
+        print(st)
+        print(info)
+        print()
+
+    def visualise_one_layer(self, layer):
+        st = ""
+        for i in range(len(layer)):
+            for j in range(len(layer[0])):
+                st += str(int(layer[i][j])) + " "
             st += "\n"
         print(st)

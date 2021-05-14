@@ -10,17 +10,14 @@
 # (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
 # Student side autograding was added by Brad Miller, Nick Hay, and
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
+import time
 
-
-from captureAgents import CaptureAgent
-import random, time, util
-from game import Directions
-import game
 from PPO import PPO
-
+from captureAgents import CaptureAgent
 #################
 # Team creation #
 #################
+from stateRepresentation import stateRepresentation
 
 first_index = None  # Index of first player
 second_index = None  # Index of second player
@@ -31,6 +28,7 @@ current_state = None
 illegal_reward = None  # Reward in case of illegal movement
 actions_idx = {'North': 0, 'South': 1, 'East': 2, 'West': 3, 'Stop': 4}
 idx_actions = {0: 'North', 1: 'South', 2: 'East', 3: 'West', 4: 'Stop'}
+first_to_initialise = None
 first_to_act = None
 
 
@@ -42,7 +40,7 @@ def createTeam(firstIndex, secondIndex, isRed,
     team, initialized using firstIndex and secondIndex as their agent
     index numbers.  isRed is True if the red team is being created, and
     will be False if the blue team is being created.
-
+  
     As a potentially helpful development aid, this function can take
     additional string-valued keyword arguments ("first" and "second" are
     such arguments in the case of this function), which will come from
@@ -63,7 +61,6 @@ def createTeam(firstIndex, secondIndex, isRed,
 ##########
 
 class DummyAgent(CaptureAgent):
-    agent_index = None
     """
     A Dummy agent to serve as an example of the necessary agent structure.
     You should look at baselineTeam.py for more details about how to
@@ -89,11 +86,22 @@ class DummyAgent(CaptureAgent):
         on initialization time, please take a look at
         CaptureAgent.registerInitialState in captureAgents.py.
         '''
+        global first_to_initialise
+
         CaptureAgent.registerInitialState(self, gameState)
+        self.distancer._distances = None
+
+        if first_to_initialise == None: first_to_initialise = self.index
+
+        if self.index == first_to_initialise:
+            global state
+            state = stateRepresentation(self, gameState, self.index, self.red)
+            state.visualise_state()
         if self.index == first_index:
             self.agent_index = 0
         else:
             self.agent_index = 1
+
 
     def chooseAction(self, gameState):
         global current_actions, temp_actions, illegal_reward, first_to_act, current_state
@@ -101,6 +109,9 @@ class DummyAgent(CaptureAgent):
         if first_to_act is None: first_to_act = self.index  # First agent to act during the whole game
 
         if self.index == first_to_act:
+            state.update_state(gameState)
+            state.visualise_state()
+            time.sleep(0.5)
             legal_actions_1 = gameState.getLegalActions(first_index)
             legal_actions_2 = gameState.getLegalActions(second_index)
             legal_actions_1 = [actions_idx[a] for a in legal_actions_1]
