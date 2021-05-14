@@ -97,6 +97,9 @@ class DummyAgent(CaptureAgent):
             global state
             state = stateRepresentation(self, gameState, self.index, self.red)
             state.visualise_state()
+            # ds = state.get_state_info(reshape=True)[0]
+            # state.visualise_reshaped_state(ds)
+            # exit()
         if self.index == first_index:
             self.agent_index = 0
         else:
@@ -111,7 +114,7 @@ class DummyAgent(CaptureAgent):
         if self.index == first_to_act:
             state.update_state(gameState)
             state.visualise_state()
-            time.sleep(0.5)
+            time.sleep(1)
             legal_actions_1 = gameState.getLegalActions(first_index)
             legal_actions_2 = gameState.getLegalActions(second_index)
             legal_actions_1 = [actions_idx[a] for a in legal_actions_1]
@@ -126,6 +129,7 @@ class DummyAgent(CaptureAgent):
                 else:
                     temp_actions = [4, 4]
         else:
+            state.update_last_enemy_positions(gameState.getAgentDistances())
             reward = 0  # TODO - Compute reward
             if illegal_reward is not None:
                 reward -= illegal_reward
