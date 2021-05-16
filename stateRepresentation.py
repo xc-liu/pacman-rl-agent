@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 
@@ -32,7 +34,6 @@ class stateRepresentation:
         indices.discard(self.index)
         self.index_second_agent = indices.pop()
         self.red = red
-        self.next_pos = {}
         self.dist_history = {}
         self.dist_history_second_agent = {}
         self.initial_enemy_pos = {}
@@ -42,7 +43,8 @@ class stateRepresentation:
         self.last_player_state = {}
         self.corresponding_index = {}
         self.digital_state = self.initialise_digital_state(gameState)
-        self.initialise_next_pos(steps=1)
+        self.next_pos1 = self.initialise_next_pos(steps=1)
+        self.next_pos2 = self.initialise_next_pos(steps=2)
         self.score = agent.getScore(gameState)
         self.time_left = gameState.data.timeleft
 
@@ -110,13 +112,14 @@ class stateRepresentation:
         return digital_state
 
     def initialise_next_pos(self, steps=2):
+        next_pos = {}
         h = len(self.digital_state[0])
         w = len(self.digital_state[0][0])
         for i in range(h):
             for j in range(w):
                 if self.digital_state[0][h - 1 - i][j] == 0:
                     pos = (i, j)
-                    self.next_pos[(pos[1], pos[0])] = []
+                    next_pos[(pos[1], pos[0])] = []
                     possible_pos = [(i + p, j + q)
                                     for p in range(-steps, steps + 1)
                                     for q in range(-steps, steps + 1)
@@ -124,7 +127,8 @@ class stateRepresentation:
                     for p in possible_pos:
                         if self.digital_state[0][h - 1 - p[0]][p[1]] == 0:
                             if self.agent.distancer.getDistance((pos[1], pos[0]), (p[1], p[0])) <= steps:
-                                self.next_pos[(pos[1], pos[0])].append((p[1], p[0]))
+                                next_pos[(pos[1], pos[0])].append((p[1], p[0]))
+        return next_pos
 
     def update_state(self, gameState):
         self.gameState = gameState
@@ -187,6 +191,10 @@ class stateRepresentation:
         myPos = gameState.getAgentState(self.index).getPosition()
         secondPos = gameState.getAgentState(self.index_second_agent).getPosition()
 
+        if not self.red:
+            myPos = (width - myPos[0] - 1, height - myPos[1] - 1)
+            secondPos = (width - secondPos[0] - 1, height - secondPos[1] - 1)
+
         for idx in self.agent.getTeam(gameState) + self.agent.getOpponents(gameState):
             enemy = False
             if idx in self.agent.getOpponents(gameState):
@@ -236,6 +244,8 @@ class stateRepresentation:
                                                              self.initial_team_pos[self.index_second_agent])]
 
                 if pos is not None:
+                    if not self.red:
+                        pos = [width - 1 - pos[0], height - 1 - pos[1]]
                     self.dist_history[idx].append(self.agent.distancer.getDistance(myPos, pos))
                     # self.dist_history[idx] = [self.agent.distancer.getDistance(myPos, pos)]
                     self.last_enemy_pos[idx] = pos
@@ -272,14 +282,17 @@ class stateRepresentation:
                     if not changed:
                         noisy_dist = np.clip(self.gameState.getAgentDistances()[original_idx], a_min=5, a_max=None)
                         pos = self.computeOpponentPosition(idx, noisy_dist, myPos)
+            else:
+                if not self.red:
+                    pos = [width - 1 - pos[0], height - 1 - pos[1]]
 
-            if not self.red:
-                pos = [width - 1 - pos[0], height - 1 - pos[1]]
+
 
             if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             else:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
+                time.sleep(1)
 
             # digital_state[4][height - int(pos[1])][int(pos[0])] = actions_idx[direction]
             self.digital_state[4][height - 1 - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
@@ -334,8 +347,12 @@ class stateRepresentation:
         # corrected_dist = noisy_dist
 
         # sample around the last enemy state, find the one with closest distance to corrected_dist
-        possible_enemy_pos = self.next_pos[
-            (int(self.last_enemy_pos[enemy_idx][0]), int(self.last_enemy_pos[enemy_idx][1]))]
+        if agent == "first":
+            possible_enemy_pos = self.next_pos2[
+                (int(self.last_enemy_pos[enemy_idx][0]), int(self.last_enemy_pos[enemy_idx][1]))]
+        else:
+            possible_enemy_pos = self.next_pos1[
+                (int(self.last_enemy_pos[enemy_idx][0]), int(self.last_enemy_pos[enemy_idx][1]))]
         possible_distances = []
         for p in possible_enemy_pos:
             possible_distances.append(self.agent.distancer.getDistance(agent_pos, p))
