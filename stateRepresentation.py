@@ -109,6 +109,10 @@ class stateRepresentation:
 
         for i in range(1, 5):
             self.last_player_state[i] = "ghost"
+        print(self.last_enemy_pos)
+        print(self.initial_enemy_pos)
+        print(self.last_team_pos)
+        print(self.initial_team_pos)
         return digital_state
 
     def initialise_next_pos(self, steps=2):
@@ -217,28 +221,30 @@ class stateRepresentation:
             if enemy:
 
                 if pos is None and self.near_last_time(agent_idx=self.index, enemy_idx=idx, distance=2):
-                    print("reinitialising first")
+                    # print("reinitialising first")
                     # if the enemy was right next to us the previous time step but suddenly disappears
                     # it is eaten and back to initial position
                     my_idx = self.corresponding_index[self.index]
                     if (self.last_player_state[my_idx] == "ghost" and self.last_player_state[idx] == "pacman") or \
                             self.last_player_state[idx] == "scared":
-                        print("enemy is back to the start")
+                        # print("enemy is back to the start")
                         self.reinitialise_enemy_position(idx, myPos, secondPos)
                     else:
-                        print("I am back to the start")
+                        # print("I am back to the start")
+                        self.last_team_pos[self.index] = self.initial_team_pos[self.index]
                         self.dist_history[idx] = [self.agent.distancer.getDistance(self.last_enemy_pos[idx],
                                                                                    self.initial_team_pos[self.index])]
 
                 elif pos is None and self.near_last_time(agent_idx=self.index_second_agent, enemy_idx=idx, distance=2):
-                    print("reinitialising second")
+                    # print("reinitialising second")
                     second_idx = self.corresponding_index[self.index_second_agent]
                     if (self.last_player_state[second_idx] == "ghost" and self.last_player_state[idx] == "pacman") or \
                             self.last_player_state[idx] == "scared":
-                        print("enemy is back to the start")
+                        # print("enemy is back to the start")
                         self.reinitialise_enemy_position(idx, myPos, secondPos)
                     else:
-                        print("I am back to the start")
+                        # print("I am back to the start")
+                        self.last_team_pos[self.index_second_agent] = self.initial_team_pos[self.index_second_agent]
                         self.dist_history_second_agent[idx] = [
                             self.agent.distancer.getDistance(self.last_enemy_pos[idx],
                                                              self.initial_team_pos[self.index_second_agent])]
@@ -292,7 +298,6 @@ class stateRepresentation:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             else:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
-                time.sleep(1)
 
             # digital_state[4][height - int(pos[1])][int(pos[0])] = actions_idx[direction]
             self.digital_state[4][height - 1 - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
@@ -315,6 +320,8 @@ class stateRepresentation:
                                                 self.last_team_pos[agent_idx]) <= distance
 
     def reinitialise_enemy_position(self, enemy_idx, myPos, secondPos):
+        # print(self.initial_enemy_pos)
+        # time.sleep(1)
         self.last_enemy_pos[enemy_idx] = self.initial_enemy_pos[enemy_idx]
         self.dist_history[enemy_idx] = [self.agent.distancer.getDistance(self.last_enemy_pos[enemy_idx], myPos)]
         self.dist_history_second_agent[enemy_idx] = [
@@ -348,7 +355,7 @@ class stateRepresentation:
 
         # sample around the last enemy state, find the one with closest distance to corrected_dist
         if agent == "first":
-            possible_enemy_pos = self.next_pos2[
+            possible_enemy_pos = self.next_pos1[
                 (int(self.last_enemy_pos[enemy_idx][0]), int(self.last_enemy_pos[enemy_idx][1]))]
         else:
             possible_enemy_pos = self.next_pos1[
@@ -473,6 +480,56 @@ class stateRepresentation:
             else:
                 reward = agent_reward
 
+        return reward
+
+    def get_positional_reward(self, new_state, mode="individual", agent_idx=None):
+        if mode == "individual":
+            assert agent_idx is not None
+            indices = [agent_idx]
+        else:
+            indices = self.agent.getTeam(self.gameState)
+
+        reward = 0
+        for idx in indices:
+            agent_reward = 0
+
+            prev_agent_state = self.gameState.getAgentState(idx)
+            agent_state = new_state.getAgentState(idx)
+            prev_agent_state_pos = prev_agent_state.getPosition()
+            agent_state_pos = agent_state.getPosition()
+
+            if self.red:
+                food = self.gameState.getRedFood()
+            else:
+                food = self.gameState.getBlueFood()
+
+            min_dist = 1e4
+            prev_min_dist = 1e4
+            for i in range(food.width):
+                for j in range(food.height):
+                    if food[i][j]:
+                        if self.agent.getMazeDistance(agent_state_pos, (i, j)) < min_dist:
+                            min_dist = self.agent.getMazeDistance(agent_state_pos, (i, j))
+                        if self.agent.getMazeDistance(prev_agent_state_pos, (i, j)) < prev_min_dist:
+                            prev_min_dist = self.agent.getMazeDistance(prev_agent_state_pos, (i, j))
+
+            agent_reward += prev_min_dist - min_dist
+
+            prev_agent_distances = self.gameState.getAgentDistances()
+            agent_distances = new_state.getAgentDistances()
+            for enemy_idx in self.agent.getOpponents(self.gameState):
+                enemy_state = new_state.getAgentState(enemy_idx)
+
+                dist = agent_distances[enemy_idx]
+                prev_dist = prev_agent_distances[enemy_idx]
+                if agent_state.isPacman and enemy_state.scaredTimer == 0:
+                    agent_reward += dist - prev_dist
+                if not agent_state.isPacman and agent_state.scaredTimer == 0:
+                    agent_reward += prev_dist - dist
+                if not agent_state.isPacman and agent_state.scaredTimer > 0:
+                    if dist < agent_state.scaredTimer + 2:
+                        agent_reward += dist - prev_dist
+            reward += agent_reward
         return reward
 
     def end_game_reward(self):
