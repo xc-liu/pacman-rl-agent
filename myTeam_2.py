@@ -12,7 +12,7 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 import time
 
-from PPO import PPO
+from PPO_2 import PPO
 from captureAgents import CaptureAgent
 #################
 # Team creation #
@@ -22,16 +22,13 @@ from stateRepresentation import stateRepresentation
 first_index = None  # Index of first player
 second_index = None  # Index of second player
 ppo_network = PPO()
-current_actions = [-1, -1]  # Actions to be executed
-temp_actions = [-1, -1]  # Actions in case of illegal movements
 current_state = None
 illegal_reward = None  # Reward in case of illegal movement
-illegal_idx = None
 actions_idx = {'North': 0, 'South': 1, 'East': 2, 'West': 3, 'Stop': 4}
 idx_actions = {0: 'North', 1: 'South', 2: 'East', 3: 'West', 4: 'Stop'}
 first_to_initialise = None
 first_to_act = None
-current_reward = 0
+
 experience = None
 past_gameState = None
 
@@ -78,7 +75,7 @@ class DummyAgent(CaptureAgent):
             first_to_initialise = None
             experience = experience[:-1]
             last_gameState = past_gameState.generateSuccessor(first_index, "Stop")
-            experience = (*experience, True, state.end_game_reward(last_gameState, self))
+            experience = (*experience, True, state.end_game_reward(last_gameState, self), state.get_state_info(reshape=False))
             ppo_network.store_experience(experience)
             experience = None
 
@@ -102,62 +99,56 @@ class DummyAgent(CaptureAgent):
         on initialization time, please take a look at
         CaptureAgent.registerInitialState in captureAgents.py.
         '''
-        global first_to_initialise, first_to_act
+        global first_to_initialise
 
         CaptureAgent.registerInitialState(self, gameState)
         self.distancer._distances = None
 
-        self.check_start()
 
+        self.check_start()
 
         if first_to_initialise == None: first_to_initialise = self.index
 
         if self.index == first_to_initialise:
             global state
             state = stateRepresentation(self, gameState, self.index, self.red)
+            # print(state.get_state_info(reshape=False)[0].shape)
+            # print(gameState.data.layout.width)
+            # print(gameState.data.layout.height)
+            # print(gameState.data.layout)
+            # exit()
         if self.index == first_index:
             self.agent_index = 0
         else:
             self.agent_index = 1
 
     def chooseAction(self, gameState):
-        global current_actions, temp_actions, illegal_reward, illegal_idx, first_to_act, \
-            current_state, first_to_initialise, current_reward, experience, past_gameState
+        global first_to_act, experience, past_gameState, illegal_reward
 
-        if first_to_act is None:
-            # time.sleep(4)
-            first_to_act = self.index  # First agent to act during the whole game
+        if first_to_act is None: first_to_act = self.index  # First agent to act during the whole game
 
         if self.index == first_to_act:
-            if experience is not None:
-                reward = state.get_reward(gameState, past_gameState, mode='chicken')
-                if illegal_reward is not None:
-                    reward -= illegal_reward
-                experience = (*experience, reward)
-                ppo_network.store_experience(experience)
-                experience = None
-
             state.update_state(gameState)
-            legal_actions_1 = gameState.getLegalActions(first_index)
-            legal_actions_2 = gameState.getLegalActions(second_index)
-            legal_actions_1 = [actions_idx[a] for a in legal_actions_1]
-            legal_actions_2 = [actions_idx[a] for a in legal_actions_2]
-            current_state = state.get_state_info(reshape=False)
-            current_actions, illegal_reward, illegal_idx = ppo_network.compute_action(current_state, legal_actions_1,
-                                                                                      legal_actions_2)
-            if illegal_reward is not None:  # There is an illegal movement
-                if illegal_idx is not None:  # Just one of them is illegal
-                    temp_actions = current_actions
-                    temp_actions[illegal_idx] = 4
-                else:
-                    temp_actions = [4, 4]
-
-            time_left = gameState.data.timeleft
-            past_gameState = gameState
-            experience = (current_state, current_actions[0], current_actions[1], (time_left <= 2 or gameState.isOver()))
         else:
             state.update_last_enemy_positions(gameState.getAgentDistances())
 
-        if illegal_reward is not None:  # There has been an illegal movement
-            return idx_actions[temp_actions[self.agent_index]]
-        return idx_actions[current_actions[self.agent_index]]
+        if experience is not None:
+            reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=self.index)
+            reward += state.get_positional_reward(gameState, past_gameState, mode='individual', agent_idx=self.index)*3
+            if illegal_reward is not None:
+                reward -= illegal_reward
+            experience = (*experience, reward, state.get_state_info(reshape=False))
+            ppo_network.store_experience(experience)
+
+        legal_actions = gameState.getLegalActions(self.index)
+        legal_actions = [actions_idx[a] for a in legal_actions]
+        current_state = state.get_state_info(reshape=False)
+        current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions,
+                                                                                  self.agent_index)
+        time_left = gameState.data.timeleft
+        experience = (current_state, current_action, self.agent_index, (time_left<=2 or gameState.isOver()))
+        past_gameState = gameState
+
+        if illegal_reward is not None:
+            return "Stop"
+        return idx_actions[current_action]

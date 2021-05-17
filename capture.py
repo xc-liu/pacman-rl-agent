@@ -401,17 +401,17 @@ class CaptureRules:
           else:
             blueCount += agentState.numReturned
         
-        if blueCount >= foodToWin:#state.getRedFood().count() == MIN_FOOD:
-          print('The Blue team has returned at least %d of the opponents\' dots.' % foodToWin)
-        elif redCount >= foodToWin:#state.getBlueFood().count() == MIN_FOOD:
-          print('The Red team has returned at least %d of the opponents\' dots.' % foodToWin)
-        else:#if state.getBlueFood().count() > MIN_FOOD and state.getRedFood().count() > MIN_FOOD:
-          print('Time is up.')
-          if state.data.score == 0: print('Tie game!')
-          else:
-            winner = 'Red'
-            if state.data.score < 0: winner = 'Blue'
-            print('The %s team wins by %d points.' % (winner, abs(state.data.score)))
+        # if blueCount >= foodToWin:#state.getRedFood().count() == MIN_FOOD:
+        #   print('The Blue team has returned at least %d of the opponents\' dots.' % foodToWin)
+        # elif redCount >= foodToWin:#state.getBlueFood().count() == MIN_FOOD:
+        #   print('The Red team has returned at least %d of the opponents\' dots.' % foodToWin)
+        # else:#if state.getBlueFood().count() > MIN_FOOD and state.getRedFood().count() > MIN_FOOD:
+        #   print('Time is up.')
+        #   if state.data.score == 0: print('Tie game!')
+        #   else:
+        #     winner = 'Red'
+        #     if state.data.score < 0: winner = 'Blue'
+        #     print('The %s team wins by %d points.' % (winner, abs(state.data.score)))
 
   def getProgress(self, game):
     blue = 1.0 - (game.state.getBlueFood().count() / float(self._initBlueFood))
