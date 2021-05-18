@@ -200,7 +200,7 @@ class PPO:
             if self.training_agent:
                 agent_options = os.listdir('past_agents_2')
                 # file = random.choice(agent_options)
-                file = agent_options[-2]
+                file = agent_options[-1]
                 file = 'past_agents_2/' + file
             checkpoint = torch.load(file)
             self.actor_network.load_state_dict(checkpoint['network_actor_state_dict'])
@@ -262,13 +262,13 @@ class PPO:
             print("Current game ", len(self.steps_per_game))
             self.step_count = 0
             self.rewards_games.append(self.reward_count)
-            if len(self.steps_per_game)%100==0:
+            if len(self.steps_per_game)%10==0:
                 self.mean_rewards = np.mean(self.rewards_games[-20:])
                 print("Game - %d, Reward - %.2f "%(len(self.steps_per_game), self.mean_rewards))
             self.reward_count = 0
             if len(self.steps_per_game)%self.num_steps == 0:
                 self.train()
-            if len(self.steps_per_game)%200 == 0:
+            if len(self.steps_per_game)%100 == 0:
                 self.save_weights()
             # if len(self.steps_per_game)==50:
             #     plt.plot(self.rewards_games)
