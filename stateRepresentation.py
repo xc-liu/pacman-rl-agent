@@ -466,8 +466,8 @@ class stateRepresentation:
 
                 agent_reward -= 5 * (enemy_state.numReturned - prev_enemy_state.numReturned) / len(indices)
 
-            if self.agent.distancer.getDistance(prev_agent_state.getPosition(), agent_state.getPosition())>1:
-                agent_reward -= 10
+            # if self.agent.distancer.getDistance(prev_agent_state.getPosition(), agent_state.getPosition())>1:
+            #     agent_reward -= 10
 
             if powered:
                 agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying
@@ -513,8 +513,10 @@ class stateRepresentation:
                         if distancer.getDistance(prev_agent_state_pos, (i, j)) < prev_min_dist:
                             prev_min_dist = distancer.getDistance(prev_agent_state_pos, (i, j))
 
-            agent_reward += (prev_min_dist - min_dist)*5
-
+            if agent_state.numCarrying == 0:
+                agent_reward += (prev_min_dist - min_dist)*5
+            if agent_state_pos == prev_agent_state_pos:
+                agent_reward -= 10
             # prev_agent_distances = old_state.getAgentDistances()
             # agent_distances = new_state.getAgentDistances()
             # for enemy_idx in self.agent.getOpponents(old_state):
