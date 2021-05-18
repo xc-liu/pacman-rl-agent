@@ -241,6 +241,7 @@ class PPO:
 
 
     def compute_action(self, state, l, agent):
+        state = self.normalize_state(state)
         dist = self.actor_network.forward(state, agent)
         action = dist.sample().numpy()[0]
         if action not in l:
@@ -290,14 +291,14 @@ class PPO:
         y = self.normalize_target_value(y)
         return y
 
-    def normalize_next_state(self):
+    def normalize_state(self, state):
         observation_std = (self.observation_squared_mean - self.observation_mean ** 2) ** 0.5
         time_std = (self.time_squared_mean - self.time_mean ** 2) ** 0.5
         score_std = (self.score_squared_mean - self.score_mean ** 2) ** 0.5
 
-        digital_state = (self.next_state[0] - self.observation_mean) / np.clip(observation_std, a_min=1e-6, a_max=None)
-        score = (self.next_state[1] - self.score_mean) / max(score_std, 1e-6)
-        time_ = (self.next_state[2] - self.time_mean) / max(time_std, 1e-6)
+        digital_state = (state[0] - self.observation_mean) / np.clip(observation_std, a_min=1e-6, a_max=None)
+        score = (state[1] - self.score_mean) / max(score_std, 1e-6)
+        time_ = (state[2] - self.time_mean) / max(time_std, 1e-6)
 
         digital_state = np.clip(digital_state, a_min=-self.input_clipping, a_max=self.input_clipping)
         score = float(np.clip(score, a_min=-self.input_clipping, a_max=self.input_clipping))
@@ -306,7 +307,7 @@ class PPO:
         return [digital_state, score, time_]
 
     def compute_gae(self, values, rewards, dones):
-        self.next_state = self.normalize_next_state()
+        self.next_state = self.normalize_state(self.next_state)
         next_value = self.critic_network(self.next_state)
         next_value = self.de_normalize_target_value(next_value)
         masks = 1 - np.array(dones)
