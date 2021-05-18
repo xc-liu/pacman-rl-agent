@@ -22,6 +22,15 @@ class Actor_network(nn.Module):
             nn.MaxPool2d(2, 2)
         )
 
+        self.feature_extraction2 = nn.Sequential(
+            nn.Conv2d(6, 18, 3, stride=1),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.AvgPool2d(2, 2),
+        )
+
         self.shared_weights = nn.Sequential(
             nn.Linear(num_inputs, 64),
             nn.Tanh(),
@@ -43,9 +52,9 @@ class Actor_network(nn.Module):
         state_representation, score, time_left = x
         extra_info = torch.tensor([score, time_left])
         state_representation = torch.tensor(state_representation, dtype=torch.float32)
-        state_representation = torch.reshape(state_representation, (1, 6, 16, 32))
+        state_representation = torch.reshape(state_representation, (1, 6, 18, 34))
 
-        x = self.feature_extraction(state_representation)
+        x = self.feature_extraction2(state_representation)
         x = torch.flatten(x)
         x = torch.cat((x, extra_info), 0)  # Include score and time to feature extraction
         x = torch.reshape(x, (1, -1))
@@ -72,6 +81,16 @@ class Critic_network(nn.Module):
             nn.MaxPool2d(2, 2)
         )
 
+        self.feature_extraction2 = nn.Sequential(
+            nn.Conv2d(6, 18, 3, stride=1),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.Conv2d(18, 18, 3, stride=1),
+            nn.AvgPool2d(2, 2),
+        )
+
+
         self.critic = nn.Sequential(
             nn.Linear(num_inputs, 256),
             nn.Tanh(),
@@ -84,9 +103,9 @@ class Critic_network(nn.Module):
         state_representation, score, time_left = x
         extra_info = torch.tensor([score, time_left])
         state_representation = torch.tensor(state_representation, dtype=torch.float32)
-        state_representation = torch.reshape(state_representation, (1, 6, 16, 32))
+        state_representation = torch.reshape(state_representation, (1, 6, 18, 34))
 
-        x = self.feature_extraction(state_representation)
+        x = self.feature_extraction2(state_representation)
         x = torch.flatten(x)
         x = torch.cat((x, extra_info), 0)  # Include score and time to feature extraction
         x = torch.reshape(x, (1, -1))
@@ -103,6 +122,9 @@ class ExperienceReplayBuffer(object):
 
     def __len__(self):
         return len(self.buffer)
+
+    def change_last_reward(self, reward):
+        self.buffer[-1] = (*self.buffer[-1][:-2], True, reward)
 
     def all_samples(self):
         batch = [self.buffer[i] for i in range(len(self.buffer))]
@@ -122,14 +144,14 @@ class PPO:
         self.discount_factor = 0.99
         self.GAE_gamma = 0.95
         self.epsilon = 0.2
-        self.num_steps = 4 # 8
+        self.num_steps = 3 # 8
         self.step_count = 0
         self.steps_per_game = []
         self.ppo_epochs = 10
         self.minibatch_size = 64
         self.action_dim = 5
-        self.state_dim = 1026
-        self.buffer_size = 5000
+        self.state_dim = 92
+        self.buffer_size = 4000
         self.lr_actor = 3e-4
         self.lr_critic = 3e-4
         self.c2 = 0.0001  # Exploration
@@ -145,8 +167,8 @@ class PPO:
         self.target_value_std = 0.0
         self.training_samples = 0
 
-        self.observation_mean = np.zeros(shape=(6, 16, 32))
-        self.observation_squared_mean = np.zeros(shape=(6, 16, 32))
+        self.observation_mean = np.zeros(shape=(6, 18, 34))
+        self.observation_squared_mean = np.zeros(shape=(6, 18, 34))
         self.time_mean = self.score_mean = self.time_squared_mean = self.score_squared_mean = 0
 
         self.next_state = None
@@ -155,10 +177,17 @@ class PPO:
 
 
     def initialize_networks(self):
-        self.actor_network = Actor_network(self.state_dim, self.action_dim)
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+
+        self.device = torch.device(dev)
+
+        self.actor_network = Actor_network(self.state_dim, self.action_dim).to(self.device)
         self.actor_optimizer = optim.Adam(self.actor_network.parameters(), lr=self.lr_actor)
 
-        self.critic_network = Critic_network(self.state_dim)
+        self.critic_network = Critic_network(self.state_dim).to(self.device)
         self.critic_optimizer = optim.Adam(self.critic_network.parameters(), lr=self.lr_critic)
 
         print()
@@ -170,7 +199,9 @@ class PPO:
             file = 'neural-network_2.pth'
             if self.training_agent:
                 agent_options = os.listdir('past_agents_2')
-                file = random.choice(agent_options)
+                # file = random.choice(agent_options)
+                file = agent_options[-2]
+                file = 'past_agents_2/' + file
             checkpoint = torch.load(file)
             self.actor_network.load_state_dict(checkpoint['network_actor_state_dict'])
             self.critic_network.load_state_dict(checkpoint['network_critic_state_dict'])
@@ -216,6 +247,9 @@ class PPO:
             return action, 100
         return action, None
 
+    def last_experience_reward(self, reward):
+        self.buffer.change_last_reward(reward)
+
     def store_experience(self, exp):
         self.training_samples += 1
         self.step_count += 1
@@ -224,18 +258,20 @@ class PPO:
         self.next_state = exp[-1]
         if exp[3]:
             self.steps_per_game.append(self.step_count)
+            print("Current game ", len(self.steps_per_game))
             self.step_count = 0
             self.rewards_games.append(self.reward_count)
-            if len(self.steps_per_game)%10==0:
-                print("Game - %d, Reward - %.2f "%(len(self.steps_per_game), self.reward_count))
+            if len(self.steps_per_game)%100==0:
+                self.mean_rewards = np.mean(self.rewards_games[-20:])
+                print("Game - %d, Reward - %.2f "%(len(self.steps_per_game), self.mean_rewards))
             self.reward_count = 0
             if len(self.steps_per_game)%self.num_steps == 0:
                 self.train()
-            if len(self.steps_per_game)%250 == 0:
+            if len(self.steps_per_game)%200 == 0:
                 self.save_weights()
-            if len(self.steps_per_game)==500:
-                plt.plot(self.rewards_games)
-                plt.show()
+            # if len(self.steps_per_game)==50:
+            #     plt.plot(self.rewards_games)
+            #     plt.show()
 
     def compute_log_probabilities(self, states, actions, agents):
         return torch.tensor([self.actor_network(states[i], agents[i]).log_prob(actions[i]) for i in range(len(states))])
@@ -293,6 +329,9 @@ class PPO:
         self.target_value_std = torch.clamp(torch.sqrt(self.target_value_squared_mean - torch.square(self.target_value_mean)), min=1e-6)
         y = (y-self.target_value_mean)/self.target_value_std
         return y
+
+    def normalize_value_functions(self, value_functions):
+        return (value_functions - self.target_value_mean) / self.target_value_std
 
     def de_normalize_target_value(self, y):
         y = y*self.target_value_std+self.target_value_mean
@@ -353,12 +392,11 @@ class PPO:
         value_functions = self.de_normalize_target_value(value_functions)
         y = self.compute_gae(value_functions, rewards, dones)
         y = self.normalize_target_value(y)
-        value_functions = self.normalize_target_value(value_functions)
+        y = y.detach().to(self.device)
 
-        y = y.detach()
-        old_log_probs = old_log_probs.detach()
+        old_log_probs = old_log_probs.detach().to(self.device)
         value_functions = value_functions.detach()
-
+        value_functions = self.normalize_value_functions(value_functions).to(self.device)
 
         advantage_estimation = y - value_functions
         self.ppo_update_split(states, actions, agents, old_log_probs, y, advantage_estimation)
@@ -382,12 +420,12 @@ class PPO:
                                                                                         advantages):
 
                 value_ = torch.tensor([self.critic_network(s) for s in state_], requires_grad=True)
-                value_ = torch.reshape(value_, (-1, 1))
+                value_ = torch.reshape(value_, (-1, 1)).to(self.device)
 
                 dist_ = [self.actor_network(state_[i], agent_[i]) for i in range(len(state_))]
-                entropy_ = torch.tensor([d.entropy() for d in dist_], requires_grad=True).mean()
+                entropy_ = torch.tensor([d.entropy() for d in dist_], requires_grad=True).mean().to(self.device)
                 new_log_prob_ = torch.tensor([dist_[i].log_prob(action_[i]) for i in range(len(state_))], requires_grad=True)
-                new_log_prob_ = torch.reshape(new_log_prob_, (-1, 1))
+                new_log_prob_ = torch.reshape(new_log_prob_, (-1, 1)).to(self.device)
 
                 ratio = (new_log_prob_ - old_log_prob_).exp()
                 surr1 = ratio * advantage_

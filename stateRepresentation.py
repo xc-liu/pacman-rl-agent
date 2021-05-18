@@ -458,27 +458,31 @@ class stateRepresentation:
                 enemy_food += enemy_state.numCarrying
                 prev_enemy_state = old_state.getAgentState(enemy_idx)
                 food_carrying_diff = enemy_state.numCarrying - prev_enemy_state.numCarrying
-                if self.near_last_time(agent_idx=idx, enemy_idx=self.corresponding_index[enemy_idx], distance=2) and food_carrying_diff < 0:
-                    agent_reward -= food_carrying_diff / len(indices)
+                # if self.near_last_time(agent_idx=idx, enemy_idx=self.corresponding_index[enemy_idx], distance=2) and food_carrying_diff < 0:
+                # if food_carrying_diff < 0:
+                agent_reward -= food_carrying_diff / len(indices)
                 if enemy_state.scaredTimer > 0:
                     powered = True
 
                 agent_reward -= 5 * (enemy_state.numReturned - prev_enemy_state.numReturned) / len(indices)
 
-            if powered:
-                agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying + 5
-            if agent_state.scaredTimer > 0:
-                agent_reward -= (enemy_food + 5) / len(indices)
+            if self.agent.distancer.getDistance(prev_agent_state.getPosition(), agent_state.getPosition())>1:
+                agent_reward -= 10
 
-            if agent_reward == 0:
+            if powered:
+                agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying
+            if agent_state.scaredTimer > 0:
+                agent_reward -= (enemy_food) / len(indices)
+
+            if agent_reward <= 0:
                 # living cost
-                reward -= 1
-            else:
-                reward = agent_reward
+                agent_reward -= 1
+            # else:
+            reward = agent_reward
 
         return reward
 
-    def get_positional_reward(self, new_state, old_state, mode="individual", agent_idx=None):
+    def get_positional_reward(self, new_state, old_state, distancer, mode="individual", agent_idx=None):
         if mode == "individual":
             assert agent_idx is not None
             indices = [agent_idx]
@@ -504,30 +508,26 @@ class stateRepresentation:
             for i in range(food.width):
                 for j in range(food.height):
                     if food[i][j]:
-                        if self.agent.getMazeDistance(agent_state_pos, (i, j)) < min_dist:
-                            min_dist = self.agent.getMazeDistance(agent_state_pos, (i, j))
-                        if self.agent.getMazeDistance(prev_agent_state_pos, (i, j)) < prev_min_dist:
-                            prev_min_dist = self.agent.getMazeDistance(prev_agent_state_pos, (i, j))
+                        if distancer.getDistance(agent_state_pos, (i, j)) < min_dist:
+                            min_dist = distancer.getDistance(agent_state_pos, (i, j))
+                        if distancer.getDistance(prev_agent_state_pos, (i, j)) < prev_min_dist:
+                            prev_min_dist = distancer.getDistance(prev_agent_state_pos, (i, j))
 
             agent_reward += (prev_min_dist - min_dist)*5
 
-            prev_agent_distances = old_state.getAgentDistances()
-            agent_distances = new_state.getAgentDistances()
-            for enemy_idx in self.agent.getOpponents(old_state):
-                enemy_state = new_state.getAgentState(enemy_idx)
-
-                dist = agent_distances[enemy_idx]
-                prev_dist = prev_agent_distances[enemy_idx]
-                if agent_state.isPacman and not enemy_state.isPacman and enemy_state.scaredTimer == 0:
-                    agent_reward += dist - prev_dist
-                if not agent_state.isPacman and enemy_state.isPacman and agent_state.scaredTimer == 0:
-                    agent_reward += prev_dist - dist
-                if not agent_state.isPacman and enemy_state.isPacman and agent_state.scaredTimer > 0:
-                    if dist < agent_state.scaredTimer + 2:
-                        agent_reward += dist - prev_dist
+            # prev_agent_distances = old_state.getAgentDistances()
+            # agent_distances = new_state.getAgentDistances()
+            # for enemy_idx in self.agent.getOpponents(old_state):
+            #     enemy_state = new_state.getAgentState(enemy_idx)
+            #
+            #     dist = agent_distances[enemy_idx]
+            #     prev_dist = prev_agent_distances[enemy_idx]
+            #     if agent_state.isPacman and not enemy_state.isPacman and enemy_state.scaredTimer == 0:
+            #         agent_reward += dist - prev_dist
+            #     if not agent_state.isPacman and enemy_state.isPacman and agent_state.scaredTimer == 0:
+            #         agent_reward += prev_dist - dist
+            #     if not agent_state.isPacman and enemy_state.isPacman and agent_state.scaredTimer > 0:
+            #         if dist < agent_state.scaredTimer + 2:
+            #             agent_reward += dist - prev_dist
             reward += agent_reward
         return reward
-
-    def end_game_reward(self, gameState, agent):
-        # print(agent.getScore(gameState))
-        return 18 if gameState.isOver() else -18

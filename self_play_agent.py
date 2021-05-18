@@ -23,7 +23,7 @@ from stateRepresentation import stateRepresentation
 
 first_index = None  # Index of first player
 second_index = None  # Index of second player
-ppo_network = PPO()
+ppo_network = PPO(training_agent=True)
 current_state = None
 illegal_reward = None  # Reward in case of illegal movement
 actions_idx = {'North': 0, 'South': 1, 'East': 2, 'West': 3, 'Stop': 4}
@@ -73,19 +73,10 @@ class DummyAgent(CaptureAgent):
     """
 
     def check_start(self):
-        global first_to_act, first_to_initialise, experience, past_gameState
+        global first_to_act, first_to_initialise, past_gameState
         if first_to_act is not None and past_gameState is not None:
             first_to_act = None
             first_to_initialise = None
-            experience = experience[:-1]
-            end_reward = return_score()*5
-            end_game_reward = end_reward if self.red else -end_reward
-            if end_game_reward>0: end_game_reward+=15
-            else: end_game_reward-=15
-            ppo_network.last_experience_reward(end_game_reward)
-            experience = (*experience, True, end_game_reward, state.get_state_info(reshape=False))
-            ppo_network.store_experience(experience)
-            experience = None
             past_gameState = None
 
 
@@ -121,11 +112,6 @@ class DummyAgent(CaptureAgent):
         if self.index == first_to_initialise:
             global state
             state = stateRepresentation(self, gameState, self.index, self.red)
-            # print(state.get_state_info(reshape=False)[0].shape)
-            # print(gameState.data.layout.width)
-            # print(gameState.data.layout.height)
-            # print(gameState.data.layout)
-            # exit()
         if self.index == first_index:
             self.agent_index = 0
         else:
@@ -141,26 +127,11 @@ class DummyAgent(CaptureAgent):
         else:
             state.update_last_enemy_positions(gameState.getAgentDistances())
 
-        if experience is not None:
-            reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=previous_agent)
-            positional_reward = state.get_positional_reward(gameState, past_gameState, maze_distancer, mode='individual', agent_idx=previous_agent)*5
-            # print(reward)
-            # if reward != -1: time.sleep(1)
-            reward += positional_reward
-            if illegal_reward is not None:
-                reward -= illegal_reward
-            experience = (*experience, reward, state.get_state_info(reshape=False))
-            ppo_network.store_experience(experience)
-
         legal_actions = gameState.getLegalActions(self.index)
         legal_actions = [actions_idx[a] for a in legal_actions]
         current_state = state.get_state_info(reshape=False)
         current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions,
                                                                                   self.agent_index)
-
-        experience = (current_state, current_action, self.agent_index, False)
-        past_gameState = gameState.deepCopy()
-        previous_agent = self.index
 
         if illegal_reward is not None:
             return "Stop"
