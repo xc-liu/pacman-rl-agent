@@ -25,11 +25,48 @@ def find_nearest(array, value):
     return (np.abs(array - value)).argmin()
 
 
+def add_players(idx1, idx2):
+    idx1 = int(idx1)
+    idx2 = int(idx2)
+    bigger_idx = max(idx1, idx2)
+    smaller_idx = min(idx1, idx2)
+    return int(bigger_idx * 10 + smaller_idx)
+
+
+def split_players(number):
+    number = int(number)
+    if (len(str(number))) == 1:
+        return False
+    idx1 = int(number / 10)
+    idx2 = number - idx1 * 10
+    return idx1, idx2
+
+
+def minus_players(number, idx):
+    number = int(number)
+    idx = int(idx)
+    if (len(str(number))) == 1:
+        return False
+    idx1 = int(number / 10)
+    if idx1 != 0:
+        idx2 = number - idx1 * 10
+    else:
+        idx2 = int(number / 10)
+        idx1 = number - idx1 * 10
+    if idx1 == idx:
+        return idx2
+    elif idx2 == idx:
+        return idx1
+    else:
+        return False
+
+
 class stateRepresentation:
     def __init__(self, agent, gameState, index, red):
         self.agent = agent
         self.gameState = gameState
         self.index = index
+        self.indices = set(self.agent.getTeam(gameState))
         indices = set(self.agent.getTeam(gameState))
         indices.discard(self.index)
         self.index_second_agent = indices.pop()
@@ -184,9 +221,6 @@ class stateRepresentation:
         change_capsule = np.nonzero(my_capsule_change)
         change_pos += [(b, height - a - 1) for a in change_capsule[0] for b in change_capsule[1]]
 
-        if len(change_pos) > 0 and not self.red:
-            change_pos = [(width - 1 - change_pos[i][0], height - 1 - change_pos[i][1]) for i in range(len(change_pos))]
-
         # update player states
         myPos = gameState.getAgentState(self.index).getPosition()
         secondPos = gameState.getAgentState(self.index_second_agent).getPosition()
@@ -283,17 +317,25 @@ class stateRepresentation:
 
                     if not changed:
                         noisy_dist = np.clip(self.gameState.getAgentDistances()[original_idx], a_min=5, a_max=None)
-                        pos = self.computeOpponentPosition(idx, noisy_dist, myPos)
+                        pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos)
             else:
                 if not self.red:
                     pos = [width - 1 - pos[0], height - 1 - pos[1]]
 
 
 
+            # if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
+            #     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
+            # else:
+            #     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
+
             if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             else:
-                self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
+                self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = add_players(
+                    self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])], idx)
+
+
 
             # digital_state[4][height - int(pos[1])][int(pos[0])] = actions_idx[direction]
             self.digital_state[4][height - 1 - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
@@ -323,7 +365,7 @@ class stateRepresentation:
         self.dist_history_second_agent[enemy_idx] = [
             self.agent.distancer.getDistance(self.last_enemy_pos[enemy_idx], secondPos)]
 
-    def update_last_enemy_positions(self, agentDistancs):
+    def update_last_enemy_positions(self, agentDistancs, enemy_pacman):
         # this function is used for the second agent to update the last enemy positions
         # when the enemies are too far to detect true positions
         for idx in self.agent.getOpponents(self.gameState):
@@ -335,9 +377,9 @@ class stateRepresentation:
                     idx += 2
             noisy_dist = np.clip(agentDistancs[original_idx], a_min=5, a_max=None)
             secondPos = self.gameState.getAgentState(self.index_second_agent).getPosition()
-            self.computeOpponentPosition(idx, noisy_dist, secondPos, "second")
+            self.computeOpponentPosition(idx, enemy_pacman[original_idx], noisy_dist, secondPos, "second")
 
-    def computeOpponentPosition(self, enemy_idx, noisy_dist, agent_pos, agent="first"):
+    def computeOpponentPosition(self, enemy_idx, enemy_pacman, noisy_dist, agent_pos, agent="first"):
         # use Kalman filter to correct the noisy distance
         if agent == "first":
             self.dist_history[enemy_idx].append(noisy_dist)
@@ -359,7 +401,19 @@ class stateRepresentation:
         possible_distances = []
         for p in possible_enemy_pos:
             possible_distances.append(self.agent.distancer.getDistance(agent_pos, p))
-        self.last_enemy_pos[enemy_idx] = possible_enemy_pos[find_nearest(possible_distances, corrected_dist)]
+        best_enemy_pos = possible_enemy_pos[find_nearest(possible_distances, corrected_dist)]
+        print(best_enemy_pos)
+        if (self.red and enemy_pacman) or (not self.red and not enemy_pacman):
+            best_enemy_pos = (int(min(best_enemy_pos[0], len(self.digital_state[0][0]) / 2)), best_enemy_pos[1])
+            while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
+                best_enemy_pos = (best_enemy_pos[0] - 1, best_enemy_pos[1])
+
+        if (self.red and not enemy_pacman) or (not self.red and enemy_pacman):
+            best_enemy_pos = (int(max(best_enemy_pos[0], int(len(self.digital_state[0][0]) / 2 + 1))), best_enemy_pos[1])
+            while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
+                best_enemy_pos = (best_enemy_pos[0] + 1, best_enemy_pos[1])
+        print(best_enemy_pos)
+        self.last_enemy_pos[enemy_idx] = best_enemy_pos
         return self.last_enemy_pos[enemy_idx]
 
     def get_state_info(self, reshape=False):
@@ -369,6 +423,38 @@ class stateRepresentation:
             digital_state = self.digital_state
 
         return digital_state, self.score, self.time_left
+
+    def get_dense_state_representation(self, agent_idx):
+        player_layer = np.zeros(shape=self.digital_state[3].shape)
+        player_loc = np.nonzero(self.digital_state[3])
+        player_loc = [(player_loc[0][i], player_loc[1][i]) for i in range(len(player_loc[0]))]
+        indices = self.indices.copy()
+        indices.discard(agent_idx)
+        agent_idx2 = indices.pop()
+        player_idx_map = {int(self.corresponding_index[agent_idx]): 1, int(self.corresponding_index[agent_idx2]): 2, 2: 4, 4: 4}
+        info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2, 4: 3}
+        print(player_idx_map)
+        food_carrying = [0, 0, 0, 0]
+        scared_timer = [0, 0, 0, 0]
+        for loc in player_loc:
+            player = int(self.digital_state[3][loc[0]][loc[1]])
+            if player < 10:
+                player_layer[loc[0]][loc[1]] = player_idx_map[player]
+                food_carrying[info_idx_map[player]] = self.digital_state[4][loc[0]][loc[1]]
+                scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]]
+            else:
+                players = split_players(player)
+                player_layer[loc[0]][loc[1]] = min(sum([player_idx_map[p] for p in players]), 4)
+                for p in players:
+                    food_carrying[info_idx_map[p]] = self.digital_state[4][loc[0]][loc[1]] / 2
+                    scared_timer[info_idx_map[p]] = self.digital_state[5][loc[0]][loc[1]] / 2
+
+        dense_state = np.zeros(shape=self.digital_state[0].shape)
+        dense_state += -self.digital_state[0]               # wall: -1
+        dense_state += player_layer                         # players: 1, 2, 4, 4 (1+2=3, 4+4=4)
+        dense_state += 5 * self.digital_state[1]            # food: 5
+        dense_state += 6 * self.digital_state[2]            # capsule:
+        return list(dense_state.flatten()) + food_carrying + scared_timer + [self.score, self.time_left]
 
     def reshape_state(self, state):
         # reshape the state into 3 * 32 * 32
@@ -431,7 +517,10 @@ class stateRepresentation:
         st = ""
         for i in range(len(layer)):
             for j in range(len(layer[0])):
-                st += str(int(layer[i][j])) + " "
+                if layer[i][j] == 0:
+                    st += "  "
+                else:
+                    st += str(int(layer[i][j])) + " "
             st += "\n"
         print(st)
 
