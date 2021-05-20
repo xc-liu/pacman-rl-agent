@@ -1,4 +1,5 @@
-from score_keeper import save_score_final
+from score_keeper import save_score_final, save_number_games
+import os
 # capture.py
 # ----------
 # Licensing Information:  You are free to use or extend these projects for
@@ -858,11 +859,42 @@ def readCommand( argv ):
     redArgs['numTraining'] = options.numTraining
     blueArgs['numTraining'] = options.numTraining
   nokeyboard = options.textgraphics or options.quiet or options.numTraining > 0
-  print('\nRed team %s with %s:' % (options.red, redArgs))
-  redAgents = loadAgents(True, options.red, nokeyboard, redArgs)
-  print('\nBlue team %s with %s:' % (options.blue, blueArgs))
-  blueAgents = loadAgents(False, options.blue, nokeyboard, blueArgs)
-  args['agents'] = sum([list(el) for el in zip(redAgents, blueAgents)],[]) # list of agents
+
+  save_number_games(options.numGames)
+  args['all_agents'] = []
+  if options.numGames > 0 and os.path.isdir(options.blue) or os.path.isdir(options.red):
+    if not os.path.isdir(options.blue):
+      blue_a = loadAgents(False, options.blue, nokeyboard, blueArgs)
+    if not os.path.isdir(options.red):
+      red_a = loadAgents(True, options.red, nokeyboard, redArgs)
+    for i in range(options.numGames):
+      if os.path.isdir(options.blue):
+        blues_opt = os.listdir(options.blue)
+        chosen = random.choice(blues_opt)
+        while chosen=='__pycache__':
+          chosen = random.choice(blues_opt)
+        new_p = options.blue +'/'+chosen
+        blue_a = loadAgents(False, new_p, nokeyboard, blueArgs)
+      if os.path.isdir(options.red):
+        red_opt = os.listdir(options.red)
+        chosen = random.choice(red_opt)
+        while chosen == '__pycache__':
+          chosen = random.choice(red_opt)
+        new_p = options.red +'/'+chosen
+        red_a = loadAgents(True, new_p, nokeyboard, redArgs)
+      to_add = sum([list(el) for el in zip(red_a, blue_a)],[]) # list of agents
+      args['all_agents'].append(to_add)
+
+  if len(args['all_agents'])==0:
+    print('\nRed team %s with %s:' % (options.red, redArgs))
+    redAgents = loadAgents(True, options.red, nokeyboard, redArgs)
+    print('\nBlue team %s with %s:' % (options.blue, blueArgs))
+
+    blueAgents = loadAgents(False, options.blue, nokeyboard, blueArgs)
+    args['agents'] = sum([list(el) for el in zip(redAgents, blueAgents)],[]) # list of agents
+  else:
+    args['agents'] = args['all_agents'][0]
+
 
   numKeyboardAgents = 0
   for index, val in enumerate([options.keys0, options.keys1, options.keys2, options.keys3]):
@@ -880,18 +912,26 @@ def readCommand( argv ):
   import layout
   layouts = []
   for i in range(options.numGames):
-    if options.layout == 'RANDOM':
-      l = layout.Layout(randomLayout().split('\n'))
-    elif options.layout.startswith('RANDOM'):
-      l = layout.Layout(randomLayout(int(options.layout[6:])).split('\n'))
-    elif options.layout.lower().find('capture') == -1:
-      raise Exception( 'You must use a capture layout with capture.py')
+    if os.path.isdir('layouts/'+options.layout):
+      path = 'layouts/'+options.layout
+      all_layouts = os.listdir(path)
+      chosen = random.choice(all_layouts)
+      while chosen=='__pycache__':
+        chosen = random.choice(all_layouts)
+      new_p = path +'/'+chosen
+      new_l = layout.getLayout( new_p )
+      layouts.append(new_l)
     else:
-      l = layout.getLayout( options.layout )
-    if l == None: raise Exception("The layout " + options.layout + " cannot be found")
-    
-    layouts.append(l)
-    
+      if options.layout == 'RANDOM':
+        l = layout.Layout(randomLayout().split('\n'))
+      elif options.layout.startswith('RANDOM'):
+        l = layout.Layout(randomLayout(int(options.layout[6:])).split('\n'))
+      elif options.layout.lower().find('capture') == -1:
+        raise Exception( 'You must use a capture layout with capture.py')
+      else:
+        l = layout.getLayout( options.layout )
+      if l == None: raise Exception("The layout " + options.layout + " cannot be found")
+      layouts.append(l)
   args['layouts'] = layouts
   args['length'] = options.time
   args['numGames'] = options.numGames
@@ -928,8 +968,8 @@ def loadAgents(isRed, factory, textgraphics, cmdLineArgs):
   args = dict()
   args.update(cmdLineArgs)  # Add command line args with priority
 
-  print("Loading Team:", factory)
-  print("Arguments:", args)
+  # print("Loading Team:", factory)
+  # print("Arguments:", args)
 
   # if textgraphics and factoryClassName.startswith('Keyboard'):
   #   raise Exception('Using the keyboard requires graphics (no text display, quiet or training games)')
@@ -965,7 +1005,7 @@ def replayGame( layout, agents, actions, display, length, redTeamName, blueTeamN
 
     display.finish()
 
-def runGames( layouts, agents, display, length, numGames, record, numTraining, redTeamName, blueTeamName, muteAgents=False, catchExceptions=False ):
+def runGames( layouts, agents, display, length, numGames, record, numTraining, redTeamName, blueTeamName, all_agents, muteAgents=False, catchExceptions=False ):
 
   rules = CaptureRules()
   games = []
@@ -976,6 +1016,10 @@ def runGames( layouts, agents, display, length, numGames, record, numTraining, r
   for i in range( numGames ):
     beQuiet = i < numTraining
     layout = layouts[i]
+    if (len(all_agents)>0):
+      current_agent = all_agents[i]
+    else:
+      current_agent = agents
     if beQuiet:
         # Suppress output and graphics
         import textDisplay
@@ -984,7 +1028,7 @@ def runGames( layouts, agents, display, length, numGames, record, numTraining, r
     else:
         gameDisplay = display
         rules.quiet = False
-    g = rules.newGame( layout, agents, gameDisplay, length, muteAgents, catchExceptions )
+    g = rules.newGame( layout, current_agent, gameDisplay, length, muteAgents, catchExceptions )
     g.run()
     if not beQuiet: games.append(g)
 

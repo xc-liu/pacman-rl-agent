@@ -13,7 +13,7 @@
 import time
 
 from score_keeper import return_score
-from PPO_network import PPO
+from PPO import PPO
 from captureAgents import CaptureAgent
 from copy import deepcopy
 #################
@@ -73,18 +73,10 @@ class DummyAgent(CaptureAgent):
     """
 
     def check_start(self):
-        global first_to_act, first_to_initialise, experience, past_gameState
+        global first_to_act, first_to_initialise, experience, past_gameState, previous_agent
         if first_to_act is not None and past_gameState is not None:
             first_to_act = None
             first_to_initialise = None
-            experience = experience[:-1]
-            end_reward = return_score()*5
-            end_game_reward = end_reward if self.red else -end_reward
-            if end_game_reward>0: end_game_reward+=15
-            else: end_game_reward-=15
-            ppo_network.last_experience_reward(end_game_reward)
-            experience = (*experience, True, end_game_reward, state.get_state_info(reshape=False))
-            ppo_network.store_experience(experience)
             experience = None
             past_gameState = None
 
@@ -112,7 +104,7 @@ class DummyAgent(CaptureAgent):
 
         CaptureAgent.registerInitialState(self, gameState)
         if maze_distancer is None:
-            maze_distancer = deepcopy(self.distancer) # TODO - change this
+            maze_distancer = deepcopy(self.distancer)
         self.distancer._distances = None
         self.check_start()
 
@@ -121,11 +113,6 @@ class DummyAgent(CaptureAgent):
         if self.index == first_to_initialise:
             global state
             state = stateRepresentation(self, gameState, self.index, self.red)
-            # print(state.get_state_info(reshape=False)[0].shape)
-            # print(gameState.data.layout.width)
-            # print(gameState.data.layout.height)
-            # print(gameState.data.layout)
-            # exit()
         if self.index == first_index:
             self.agent_index = 0
         else:
@@ -133,31 +120,22 @@ class DummyAgent(CaptureAgent):
 
     def chooseAction(self, gameState):
         global first_to_act, experience, past_gameState, illegal_reward, maze_distancer, previous_agent
-        if first_to_act is None: first_to_act = self.index  # First agent to act during the whole game
+
+        if first_to_act is None: first_to_act = self.index
 
         if self.index == first_to_act:
             state.update_state(gameState)
         else:
-            state.update_last_enemy_positions(gameState.getAgentDistances())
-
-        if experience is not None:
-            reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=previous_agent)
-            positional_reward = state.get_positional_reward(gameState, past_gameState, maze_distancer, mode='individual', agent_idx=previous_agent)
-            # print(reward)
-            # if reward != -1: time.sleep(1)
-            reward += positional_reward
-            if illegal_reward is not None:
-                reward -= illegal_reward
-            experience = (*experience, reward, state.get_state_info(reshape=False))
-            ppo_network.store_experience(experience)
+            opponent_pacman = {}
+            for i in self.getOpponents(gameState):
+                opponent_pacman[i] = gameState.getAgentState(i).isPacman
+            state.update_last_enemy_positions(gameState.getAgentDistances(), opponent_pacman)
 
         legal_actions = gameState.getLegalActions(self.index)
         legal_actions = [actions_idx[a] for a in legal_actions]
-        current_state = state.get_state_info(reshape=False)
-        current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions,
-                                                                                  self.agent_index)
-
-        experience = (current_state[0], current_state[1], current_state[2], current_action, self.agent_index, False)
+        current_state = state.get_dense_state_representation(self.index)
+        current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions)
+        experience = (current_state, current_action, False)
         past_gameState = gameState.deepCopy()
         previous_agent = self.index
 

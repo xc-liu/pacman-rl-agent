@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 from torch.distributions import Categorical
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 
@@ -20,14 +20,6 @@ def convert_state_to_tensor(state):
 class Actor_network(nn.Module):
     def __init__(self, num_inputs, num_outputs):
         super(Actor_network, self).__init__()
-
-        # feature extraction: input 6 * 16 * 32 + 2, output: 256 + 2
-        self.feature_extraction = nn.Sequential(
-            nn.Conv2d(6, 16, 3, padding=1),
-            # nn.MaxPool2d(2, 2),
-            nn.Conv2d(16, 8, 3, padding=1),
-            nn.MaxPool2d(2, 2)
-        )
 
         self.feature_extraction2 = nn.Sequential(
             nn.Conv2d(6, 18, 3, stride=1),
@@ -65,6 +57,7 @@ class Actor_network(nn.Module):
         for i in range(len(agents)):
             if agents[i] == 0:
                 agent_out= self.agent1(shared[i])
+
             else:
                 agent_out = self.agent2(shared[i])
             outputs = torch.cat((outputs, agent_out), 0)
@@ -74,13 +67,6 @@ class Actor_network(nn.Module):
 class Critic_network(nn.Module):
     def __init__(self, num_inputs):
         super(Critic_network, self).__init__()
-
-        self.feature_extraction = nn.Sequential(
-            nn.Conv2d(6, 16, 3, padding=1),
-            # nn.MaxPool2d(2, 2),
-            nn.Conv2d(16, 8, 3, padding=1),
-            nn.MaxPool2d(2, 2)
-        )
 
         self.feature_extraction2 = nn.Sequential(
             nn.Conv2d(6, 18, 3, stride=1),
@@ -94,11 +80,11 @@ class Critic_network(nn.Module):
 
 
         self.critic = nn.Sequential(
-            nn.Linear(num_inputs, 256),
+            nn.Linear(num_inputs, 64),
             nn.Tanh(),
-            nn.Linear(256, 256),
+            nn.Linear(64, 64),
             nn.Tanh(),
-            nn.Linear(256, 1)
+            nn.Linear(64, 1)
         )
 
     def forward(self, states, scores, times):
@@ -141,17 +127,17 @@ class PPO:
         self.GAE_gamma = 0.95
         self.epsilon = 0.2
         # self.num_steps = 4 # 8
-        self.exp_to_learn = 2400
+        self.exp_to_learn = 1000
         self.step_count = 0
         self.steps_per_game = []
         self.ppo_epochs = 10
-        self.minibatch_size = 64
+        self.minibatch_size = 32
         self.action_dim = 5
         self.state_dim = 92
         self.buffer_size = 4000
-        self.lr_actor = 3e-4
+        self.lr_actor = 1e-5
         self.lr_critic = 3e-4
-        self.c2 = 3e-4  # Exploration
+        self.c2 = 0.001  # Exploration
         self.input_clipping = 10
 
         self.buffer = ExperienceReplayBuffer(maximum_length=self.buffer_size)
@@ -184,6 +170,7 @@ class PPO:
         print()
         self.load_weights()
         print()
+
 
     def load_weights(self):
         try:
@@ -262,9 +249,9 @@ class PPO:
                 self.mean_rewards = np.mean(self.rewards_games[-20:])
                 print("Game - %d, Reward - %.2f " % (len(self.steps_per_game), self.mean_rewards), end='\r')
                 self.train()
+                # if len(self.steps_per_game)%2==0: self.save_weights()
+            if len(self.steps_per_game)%100 == 0:
                 self.save_weights()
-            # if len(self.steps_per_game)%50 == 0:
-            #     self.save_weights()
             # if len(self.steps_per_game)==50:
             #     plt.plot(self.rewards_games)
             #     plt.show()

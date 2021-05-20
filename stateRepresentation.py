@@ -322,7 +322,6 @@ class stateRepresentation:
             #     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             # else:
             #     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] += idx + 1
-
             if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
             else:
@@ -528,7 +527,8 @@ class stateRepresentation:
 
             prev_agent_state = old_state.getAgentState(idx)
             agent_state = new_state.getAgentState(idx)
-            agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying
+            if (agent_state.numReturned - prev_agent_state.numReturned)<=0:
+                agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying
             agent_reward += 5 * (agent_state.numReturned - prev_agent_state.numReturned)
 
             powered = False
@@ -537,17 +537,18 @@ class stateRepresentation:
                 enemy_state = new_state.getAgentState(enemy_idx)
                 enemy_food += enemy_state.numCarrying
                 prev_enemy_state = old_state.getAgentState(enemy_idx)
-                food_carrying_diff = enemy_state.numCarrying - prev_enemy_state.numCarrying
+                if (enemy_state.numReturned - prev_enemy_state.numReturned)<=0:
+                    food_carrying_diff = enemy_state.numCarrying - prev_enemy_state.numCarrying
                 # if self.near_last_time(agent_idx=idx, enemy_idx=self.corresponding_index[enemy_idx], distance=2) and food_carrying_diff < 0:
                 # if food_carrying_diff < 0:
-                agent_reward -= food_carrying_diff / len(indices)
+                    agent_reward -= food_carrying_diff / len(indices)
                 if enemy_state.scaredTimer > 0:
                     powered = True
 
                 agent_reward -= 5 * (enemy_state.numReturned - prev_enemy_state.numReturned) / len(indices)
 
-            # if self.agent.distancer.getDistance(prev_agent_state.getPosition(), agent_state.getPosition())>1:
-            #     agent_reward -= 10
+            if self.agent.distancer.getDistance(prev_agent_state.getPosition(), agent_state.getPosition())>1:
+                agent_reward -= 2
 
             if powered:
                 agent_reward += agent_state.numCarrying - prev_agent_state.numCarrying
@@ -584,6 +585,8 @@ class stateRepresentation:
                 food = old_state.getRedFood()
 
             min_dist = 1e4
+            agent_state_pos = (int(agent_state_pos[0]), int(agent_state_pos[1]))
+            prev_agent_state_pos = (int(prev_agent_state_pos[0]), int(prev_agent_state_pos[1]))
             prev_min_dist = 1e4
             for i in range(food.width):
                 for j in range(food.height):
@@ -596,7 +599,7 @@ class stateRepresentation:
             if agent_state.numCarrying == 0:
                 agent_reward += (prev_min_dist - min_dist)*5
             if agent_state_pos == prev_agent_state_pos:
-                agent_reward -= 10
+                agent_reward -= 50
             # prev_agent_distances = old_state.getAgentDistances()
             # agent_distances = new_state.getAgentDistances()
             # for enemy_idx in self.agent.getOpponents(old_state):
