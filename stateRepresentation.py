@@ -251,29 +251,23 @@ class stateRepresentation:
             if enemy:
 
                 if pos is None and self.near_last_time(agent_idx=self.index, enemy_idx=idx, distance=2):
-                    # print("reinitialising first")
                     # if the enemy was right next to us the previous time step but suddenly disappears
                     # it is eaten and back to initial position
                     my_idx = self.corresponding_index[self.index]
                     if (self.last_player_state[my_idx] == "ghost" and self.last_player_state[idx] == "pacman") or \
                             self.last_player_state[idx] == "scared":
-                        # print("enemy is back to the start")
                         self.reinitialise_enemy_position(idx, myPos, secondPos)
                     else:
-                        # print("I am back to the start")
                         self.last_team_pos[self.index] = self.initial_team_pos[self.index]
                         self.dist_history[idx] = [self.agent.distancer.getDistance(self.last_enemy_pos[idx],
                                                                                    self.initial_team_pos[self.index])]
 
                 elif pos is None and self.near_last_time(agent_idx=self.index_second_agent, enemy_idx=idx, distance=2):
-                    # print("reinitialising second")
                     second_idx = self.corresponding_index[self.index_second_agent]
                     if (self.last_player_state[second_idx] == "ghost" and self.last_player_state[idx] == "pacman") or \
                             self.last_player_state[idx] == "scared":
-                        # print("enemy is back to the start")
                         self.reinitialise_enemy_position(idx, myPos, secondPos)
                     else:
-                        # print("I am back to the start")
                         self.last_team_pos[self.index_second_agent] = self.initial_team_pos[self.index_second_agent]
                         self.dist_history_second_agent[idx] = [
                             self.agent.distancer.getDistance(self.last_enemy_pos[idx],
@@ -358,8 +352,6 @@ class stateRepresentation:
                                                 self.last_team_pos[agent_idx]) <= distance
 
     def reinitialise_enemy_position(self, enemy_idx, myPos, secondPos):
-        # print(self.initial_enemy_pos)
-        # time.sleep(1)
         self.last_enemy_pos[enemy_idx] = self.initial_enemy_pos[enemy_idx]
         self.dist_history[enemy_idx] = [self.agent.distancer.getDistance(self.last_enemy_pos[enemy_idx], myPos)]
         self.dist_history_second_agent[enemy_idx] = [
@@ -402,17 +394,16 @@ class stateRepresentation:
         for p in possible_enemy_pos:
             possible_distances.append(self.agent.distancer.getDistance(agent_pos, p))
         best_enemy_pos = possible_enemy_pos[find_nearest(possible_distances, corrected_dist)]
-        print(best_enemy_pos)
-        if (self.red and enemy_pacman) or (not self.red and not enemy_pacman):
+        if (self.red and enemy_pacman) or (not self.red and enemy_pacman):
             best_enemy_pos = (int(min(best_enemy_pos[0], len(self.digital_state[0][0]) / 2)), best_enemy_pos[1])
             while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
                 best_enemy_pos = (best_enemy_pos[0] - 1, best_enemy_pos[1])
 
-        if (self.red and not enemy_pacman) or (not self.red and enemy_pacman):
+        if (self.red and not enemy_pacman) or (not self.red and not enemy_pacman):
             best_enemy_pos = (int(max(best_enemy_pos[0], int(len(self.digital_state[0][0]) / 2 + 1))), best_enemy_pos[1])
             while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
                 best_enemy_pos = (best_enemy_pos[0] + 1, best_enemy_pos[1])
-        print(best_enemy_pos)
+
         self.last_enemy_pos[enemy_idx] = best_enemy_pos
         return self.last_enemy_pos[enemy_idx]
 
@@ -433,7 +424,7 @@ class stateRepresentation:
         agent_idx2 = indices.pop()
         player_idx_map = {int(self.corresponding_index[agent_idx]): 1, int(self.corresponding_index[agent_idx2]): 2, 2: 4, 4: 4}
         info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2, 4: 3}
-        print(player_idx_map)
+
         food_carrying = [0, 0, 0, 0]
         scared_timer = [0, 0, 0, 0]
         for loc in player_loc:
