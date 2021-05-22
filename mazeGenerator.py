@@ -223,11 +223,12 @@ def add_pacman_stuff(maze, max_food=60, max_capsules=4, toskip=0):
     if num_added == 0: break
     if depth >= max_depth: break
 
-  ## starting pacmen positions
-  maze.grid[maze.r-2][1] = '3'
-  maze.grid[maze.r-3][1] = '1'
-  maze.grid[1][maze.c-2] = '4'
-  maze.grid[2][maze.c-2] = '2'
+
+
+  # maze.grid[maze.r-2][1] = '3'
+  # maze.grid[maze.r-3][1] = '1'
+  # maze.grid[1][maze.c-2] = '4'
+  # maze.grid[2][maze.c-2] = '2'
 
   ## add capsules
   total_capsules = 0
@@ -251,6 +252,22 @@ def add_pacman_stuff(maze, max_food=60, max_capsules=4, toskip=0):
       maze.grid[row][col] = F
       maze.grid[maze.r-row-1][maze.c-(col)-1] = F
       total_food += 2
+
+  agents_to_create = ['3', '1']
+  new_pos = [random.randint(0, 16), random.randint(0, 16)]
+  for a in agents_to_create:
+    while maze.grid[new_pos[0]][new_pos[1]] != ' ':
+      new_pos = [random.randint(0, 16), random.randint(0, 16)]
+    maze.grid[new_pos[0]][new_pos[1]] = a
+
+
+  agents_to_create = ['4', '2']
+  new_pos = [random.randint(0, 16), random.randint(18, 33)]
+  for a in agents_to_create:
+    while maze.grid[new_pos[0]][new_pos[1]] != ' ':
+      new_pos = [random.randint(0, 16), random.randint(18, 33)]
+    maze.grid[new_pos[0]][new_pos[1]] = a
+
 
 MAX_DIFFERENT_MAZES = 10000
 

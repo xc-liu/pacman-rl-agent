@@ -924,6 +924,7 @@ def readCommand( argv ):
         chosen = random.choice(all_layouts)
       args['layouts_names'].append(chosen)
       new_p = path +'/'+chosen
+      # print(new_p)
       new_l = layout.getLayout( new_p )
       layouts.append(new_l)
     else:

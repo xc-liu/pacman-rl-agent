@@ -2,6 +2,7 @@ import math
 import time
 
 import numpy as np
+from score_keeper import get_timesteps
 
 
 def kalman(v, r, q):
@@ -602,6 +603,8 @@ class stateRepresentation:
             indices = [agent_idx]
         else:
             indices = self.agent.getTeam(old_state)
+
+        # current_timestep = get_timesteps()
 
         reward = 0
         for idx in indices:

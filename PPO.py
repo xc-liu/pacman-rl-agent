@@ -8,7 +8,7 @@ import torch.optim as optim
 from collections import deque
 from torch.distributions import Categorical
 import matplotlib.pyplot as plt
-from score_keeper import return_number_games
+from score_keeper import return_number_games, save_timesteps
 
 
 def convert_state_to_tensor(state):
@@ -100,7 +100,7 @@ class PPO:
         self.buffer_size = 4000
         self.lr_actor = 1e-4
         self.lr_critic = 3e-4
-        self.c2 = 0.001  # Exploration
+        self.c2 = 1e-4  # Exploration
 
         self.buffer = ExperienceReplayBuffer(maximum_length=self.buffer_size)
         self.training_agent = training_agent
@@ -112,6 +112,8 @@ class PPO:
         self.target_value_squared_mean = 0.0
         self.target_value_std = 0.0
         self.training_samples = 0
+
+        self.number_games = 0
 
         self.saving_frequency = return_number_games()
         self.initial_frequency = int(self.saving_frequency)
@@ -153,15 +155,20 @@ class PPO:
             self.actor_network.load_state_dict(checkpoint['network_actor_state_dict'])
             self.critic_network.load_state_dict(checkpoint['network_critic_state_dict'])
             self.actor_optimizer.load_state_dict(checkpoint['optimizer_actor_state_dict'])
+            self.actor_optimizer.param_groups[0]['lr'] = self.lr_actor
             self.critic_optimizer.load_state_dict(checkpoint['optimizer_critic_state_dict'])
             self.target_value_mean, self.target_value_squared_mean, self.target_value_std, \
             self.training_samples = checkpoint['previous_info']
+            # self.target_value_mean, self.target_value_squared_mean, self.target_value_std, \
+            # self.training_samples, self.number_games = checkpoint['previous_info']
             print("Loaded previous model ", int((self.training_samples-3216009)/self.exp_to_learn)+7683)
         except:
             print("Error loading model")
 
     def save_weights(self):
         try:
+            # previous_info = [self.target_value_mean, self.target_value_squared_mean, self.target_value_std,
+            #                  self.training_samples, self.number_games]
             previous_info = [self.target_value_mean, self.target_value_squared_mean, self.target_value_std,
                              self.training_samples]
             torch.save({
@@ -204,6 +211,8 @@ class PPO:
         self.buffer.append(exp[:-1])
         self.next_state = exp[-1]
         if exp[-3]:
+            # self.number_games += 1
+            # save_timesteps(self.number_games)
             self.steps_per_game.append(self.step_count)
             self.step_count = 0
             self.rewards_games.append(self.reward_count)
