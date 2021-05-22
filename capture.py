@@ -1,5 +1,7 @@
 from score_keeper import save_score_final, save_number_games
 import os
+import json
+import traceback
 # capture.py
 # ----------
 # Licensing Information:  You are free to use or extend these projects for
@@ -910,6 +912,8 @@ def readCommand( argv ):
 
   # Choose a layout
   import layout
+
+  args['layouts_names'] = []
   layouts = []
   for i in range(options.numGames):
     if os.path.isdir('layouts/'+options.layout):
@@ -918,10 +922,12 @@ def readCommand( argv ):
       chosen = random.choice(all_layouts)
       while chosen=='__pycache__':
         chosen = random.choice(all_layouts)
+      args['layouts_names'].append(chosen)
       new_p = path +'/'+chosen
       new_l = layout.getLayout( new_p )
       layouts.append(new_l)
     else:
+      args['layouts_names'].append(options.layout)
       if options.layout == 'RANDOM':
         l = layout.Layout(randomLayout().split('\n'))
       elif options.layout.startswith('RANDOM'):
@@ -1005,7 +1011,7 @@ def replayGame( layout, agents, actions, display, length, redTeamName, blueTeamN
 
     display.finish()
 
-def runGames( layouts, agents, display, length, numGames, record, numTraining, redTeamName, blueTeamName, all_agents, muteAgents=False, catchExceptions=False ):
+def runGames( layouts, agents, display, length, numGames, record, numTraining, redTeamName, blueTeamName, all_agents, layouts_names, muteAgents=False, catchExceptions=False ):
 
   rules = CaptureRules()
   games = []
@@ -1013,9 +1019,15 @@ def runGames( layouts, agents, display, length, numGames, record, numTraining, r
   if numTraining > 0:
     print('Playing %d training games' % numTraining)
 
+
+  scores_by_map = {}
   for i in range( numGames ):
     beQuiet = i < numTraining
     layout = layouts[i]
+    current_layout = layouts_names[i]
+    if current_layout not in scores_by_map:
+      scores_by_map[current_layout] = [0, 0, 0]
+    scores_by_map[current_layout][0] += 1
     if (len(all_agents)>0):
       current_agent = all_agents[i]
     else:
@@ -1028,31 +1040,44 @@ def runGames( layouts, agents, display, length, numGames, record, numTraining, r
     else:
         gameDisplay = display
         rules.quiet = False
-    g = rules.newGame( layout, current_agent, gameDisplay, length, muteAgents, catchExceptions )
-    g.run()
-    if not beQuiet: games.append(g)
+    try:
+      g = rules.newGame( layout, current_agent, gameDisplay, length, muteAgents, catchExceptions )
+      g.run()
+      if not beQuiet: games.append(g)
+      g.record = None
+      if record:
+        import time, pickle, game
+        # fname = ('recorded-game-%d' % (i + 1)) +  '-'.join([str(t) for t in time.localtime()[1:6]])
+        # f = file(fname, 'w')
+        components = {'layout': layout, 'agents': [game.Agent() for a in agents], 'actions': g.moveHistory,
+                      'length': length, 'redTeamName': redTeamName, 'blueTeamName': blueTeamName}
+        # f.close()
+        print("recorded")
+        g.record = pickle.dumps(components)
+        with open('replay-%d' % i, 'wb') as f:
+          f.write(g.record)
+      if g.state.data.score > 0:
+        scores_by_map[current_layout][1] += 1
+      scores_by_map[current_layout][2] += g.state.data.score
+    except Exception as e:
+      print(layouts_names[i])
+      traceback.print_exc()
 
-    g.record = None
-    if record:
-      import time, pickle, game
-      #fname = ('recorded-game-%d' % (i + 1)) +  '-'.join([str(t) for t in time.localtime()[1:6]])
-      #f = file(fname, 'w')
-      components = {'layout': layout, 'agents': [game.Agent() for a in agents], 'actions': g.moveHistory, 'length': length, 'redTeamName': redTeamName, 'blueTeamName':blueTeamName }
-      #f.close()
-      print("recorded")
-      g.record = pickle.dumps(components)
-      with open('replay-%d'%i,'wb') as f:
-        f.write(g.record)
 
+  for s in scores_by_map:
+    scores_by_map[s][1] = float(scores_by_map[s][1]/scores_by_map[s][0])
+    scores_by_map[s][2] = float(scores_by_map[s][2] / scores_by_map[s][0])
   if numGames > 1:
     scores = [game.state.data.score for game in games]
     redWinRate = [s > 0 for s in scores].count(True)/ float(len(scores))
     blueWinRate = [s < 0 for s in scores].count(True)/ float(len(scores))
     print('Average Score:', sum(scores) / float(len(scores)))
-    print('Scores:       ', ', '.join([str(score) for score in scores]))
+    # print('Scores:       ', ', '.join([str(score) for score in scores]))
     print('Red Win Rate:  %d/%d (%.2f)' % ([s > 0 for s in scores].count(True), len(scores), redWinRate))
     print('Blue Win Rate: %d/%d (%.2f)' % ([s < 0 for s in scores].count(True), len(scores), blueWinRate))
-    print('Record:       ', ', '.join([('Blue', 'Tie', 'Red')[max(0, min(2, 1 + s))] for s in scores]))
+
+    print(json.dumps(scores_by_map, indent=4, sort_keys=True))
+    # print('Record:       ', ', '.join([('Blue', 'Tie', 'Red')[max(0, min(2, 1 + s))] for s in scores]))
   return games
 
 def save_score(game):

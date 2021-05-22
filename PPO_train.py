@@ -12,6 +12,7 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 import time
 
+import distanceCalculator
 from score_keeper import return_score
 from PPO import PPO
 from captureAgents import CaptureAgent
@@ -35,6 +36,7 @@ maze_distancer = None
 experience = None
 past_gameState = None
 previous_agent = None
+game_length = None
 
 
 def createTeam(firstIndex, secondIndex, isRed,
@@ -73,15 +75,21 @@ class DummyAgent(CaptureAgent):
     """
 
     def check_start(self):
-        global first_to_act, first_to_initialise, experience, past_gameState, previous_agent, state, maze_distancer
+        global first_to_act, first_to_initialise, experience, past_gameState, previous_agent, state, maze_distancer, game_length, state
         if first_to_act is not None and past_gameState is not None:
             first_to_act = None
             first_to_initialise = None
             experience = experience[:-1]
             end_reward = return_score()
             end_game_reward = end_reward if self.red else -end_reward
-            if end_game_reward>0: end_game_reward+=5
-            else: end_game_reward-=5
+
+            time_left_previous_game = past_gameState.data.timeleft / game_length
+
+            if end_game_reward>0:
+                end_game_reward += 5 + time_left_previous_game*10
+            else:
+                end_game_reward -= (5 + time_left_previous_game*10)
+
             ppo_network.last_experience_reward(end_game_reward)
             experience = (*experience, True, end_game_reward, state.get_dense_state_representation(previous_agent))
             ppo_network.store_experience(experience)
@@ -110,13 +118,16 @@ class DummyAgent(CaptureAgent):
         on initialization time, please take a look at
         CaptureAgent.registerInitialState in captureAgents.py.
         '''
-        global first_to_initialise, maze_distancer
+        global first_to_initialise, maze_distancer, game_length
 
         CaptureAgent.registerInitialState(self, gameState)
         if maze_distancer is None:
-            maze_distancer = deepcopy(self.distancer)
+            maze_distancer = distanceCalculator.Distancer(gameState.data.layout)
+            maze_distancer.getMazeDistances()
         self.distancer._distances = None
         self.check_start()
+
+        if game_length is None: game_length = gameState.data.timeleft
 
         if first_to_initialise == None: first_to_initialise = self.index
 
@@ -129,17 +140,9 @@ class DummyAgent(CaptureAgent):
             self.agent_index = 1
 
     def chooseAction(self, gameState):
-        global first_to_act, experience, past_gameState, illegal_reward, maze_distancer, previous_agent
+        global first_to_act, experience, past_gameState, illegal_reward, maze_distancer, previous_agent, state
 
         if first_to_act is None: first_to_act = self.index
-
-        if self.index == first_to_act:
-            state.update_state(gameState)
-        else:
-            opponent_pacman = {}
-            for i in self.getOpponents(gameState):
-                opponent_pacman[i] = gameState.getAgentState(i).isPacman
-            state.update_last_enemy_positions(gameState.getAgentDistances(), opponent_pacman)
 
         if experience is not None:
             reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=previous_agent)
@@ -153,9 +156,7 @@ class DummyAgent(CaptureAgent):
         legal_actions = gameState.getLegalActions(self.index)
         legal_actions = [actions_idx[a] for a in legal_actions]
         current_state = state.get_dense_state_representation(self.index)
-        # print(self.index)
         current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions)
-        # time.sleep(1)
         experience = (current_state, current_action, False)
         past_gameState = gameState.deepCopy()
         previous_agent = self.index

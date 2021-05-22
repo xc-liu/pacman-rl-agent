@@ -133,9 +133,10 @@ def make_with_prison(room, depth, gaps=1, vert=True, min_width=1, gapfactor=0.5)
   else:
     p = 3
 
+  p = 0
 
   add_r, add_c = room.anchor
-  print(p)
+  # print(p)
   for j in range(p):
     cur_col = 2*(j+1)-1
     for row in range(room.r):

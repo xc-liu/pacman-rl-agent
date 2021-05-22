@@ -90,15 +90,15 @@ class PPO:
         self.discount_factor = 0.99
         self.GAE_gamma = 0.95
         self.epsilon = 0.2
-        self.exp_to_learn = 1000
+        self.exp_to_learn = 2000
         self.step_count = 0
         self.steps_per_game = []
         self.ppo_epochs = 10
-        self.minibatch_size = 32
+        self.minibatch_size = 64
         self.action_dim = 5
         self.state_dim = 622
         self.buffer_size = 4000
-        self.lr_actor = 1e-5
+        self.lr_actor = 1e-4
         self.lr_critic = 3e-4
         self.c2 = 0.001  # Exploration
 
@@ -114,13 +114,18 @@ class PPO:
         self.training_samples = 0
 
         self.saving_frequency = return_number_games()
-        self.do_plotting = False if self.saving_frequency > 400 else True
+        self.initial_frequency = int(self.saving_frequency)
+        self.do_plotting = False if self.saving_frequency > 1200 else True
         while self.saving_frequency>400:
             if self.saving_frequency%2 ==0:
                 self.saving_frequency /= 2
             else:
                 self.saving_frequency /= 3
 
+        if self.initial_frequency > 400 and self.saving_frequency < 200:
+            self.saving_frequency = 200
+
+        self.saving_frequency = int(self.saving_frequency)-1
         self.next_state = None
 
         self.initialize_networks()
@@ -142,8 +147,7 @@ class PPO:
             file = 'neural-network_2.pth'
             if self.training_agent:
                 agent_options = os.listdir('past_agents_2')
-                # file = random.choice(agent_options)
-                file = agent_options[-1]
+                file = random.choice(agent_options)
                 file = 'past_agents_2/' + file
             checkpoint = torch.load(file)
             self.actor_network.load_state_dict(checkpoint['network_actor_state_dict'])
@@ -152,7 +156,7 @@ class PPO:
             self.critic_optimizer.load_state_dict(checkpoint['optimizer_critic_state_dict'])
             self.target_value_mean, self.target_value_squared_mean, self.target_value_std, \
             self.training_samples = checkpoint['previous_info']
-            print("Loaded previous model ", int(self.training_samples/self.exp_to_learn))
+            print("Loaded previous model ", int((self.training_samples-3216009)/self.exp_to_learn)+7683)
         except:
             print("Error loading model")
 
@@ -168,13 +172,15 @@ class PPO:
                 'previous_info': previous_info
             }, 'neural-network_2.pth')
 
-            torch.save({
-                'network_actor_state_dict': self.actor_network.state_dict(),
-                'network_critic_state_dict': self.critic_network.state_dict(),
-                'optimizer_actor_state_dict': self.actor_optimizer.state_dict(),
-                'optimizer_critic_state_dict': self.critic_optimizer.state_dict(),
-                'previous_info': previous_info
-            }, 'past_agents_2/neural-network_' + str(time.time()) + '.pth')
+
+            if random.uniform(0, 1) > 0.7:
+                torch.save({
+                    'network_actor_state_dict': self.actor_network.state_dict(),
+                    'network_critic_state_dict': self.critic_network.state_dict(),
+                    'optimizer_actor_state_dict': self.actor_optimizer.state_dict(),
+                    'optimizer_critic_state_dict': self.critic_optimizer.state_dict(),
+                    'previous_info': previous_info
+                }, 'past_agents_2/neural-network_' + str(int((self.training_samples-3216009)/self.exp_to_learn)+7683) + '.pth')
 
             print("Model saved")
         except:
@@ -185,7 +191,7 @@ class PPO:
         dist = self.actor_network.forward(state)
         action = int(dist.sample().numpy())
         if action not in l:
-            return action, 50
+            return action, 2
         return action, None
 
     def last_experience_reward(self, reward):
@@ -203,15 +209,16 @@ class PPO:
             self.rewards_games.append(self.reward_count)
             self.reward_count = 0
             if len(self.buffer) >= self.exp_to_learn:
-                self.mean_rewards = np.mean(self.rewards_games[-20:])
-                self.mean_rewards_games.append(self.mean_rewards)
+                self.mean_rewards = np.mean(self.rewards_games[-50:])
+                if len(self.steps_per_game) >= 50 or self.initial_frequency<100: self.mean_rewards_games.append(self.mean_rewards)
                 print("Game - %d, Reward - %.2f " % (len(self.steps_per_game), self.mean_rewards), end='\r')
                 self.train()
             if len(self.steps_per_game) % (self.saving_frequency-1) == 0:
                 self.save_weights()
-                if self.do_plotting:
-                    plt.plot(self.mean_rewards_games)
-                    plt.show()
+            if len(self.steps_per_game) % (self.initial_frequency-1) == 0 and self.do_plotting:
+                self.save_weights()
+                plt.plot(self.mean_rewards_games)
+                plt.show()
 
 
     def compute_target_value(self, rewards):

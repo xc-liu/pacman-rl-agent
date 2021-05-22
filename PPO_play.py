@@ -12,10 +12,9 @@
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 import time
 
-from score_keeper import return_score
-from PPO import PPO
+from PPO_network_play import PPO
 from captureAgents import CaptureAgent
-from copy import deepcopy
+import distanceCalculator
 #################
 # Team creation #
 #################
@@ -25,16 +24,13 @@ first_index = None  # Index of first player
 second_index = None  # Index of second player
 ppo_network = PPO()
 current_state = None
-illegal_reward = None  # Reward in case of illegal movement
 actions_idx = {'North': 0, 'South': 1, 'East': 2, 'West': 3, 'Stop': 4}
 idx_actions = {0: 'North', 1: 'South', 2: 'East', 3: 'West', 4: 'Stop'}
 first_to_initialise = None
 first_to_act = None
 maze_distancer = None
 
-experience = None
-past_gameState = None
-previous_agent = None
+flip = {'North': 'South', 'East': 'West', 'South': 'North', 'West': 'East', 'Stop': 'Stop'}
 
 
 def createTeam(firstIndex, secondIndex, isRed,
@@ -73,12 +69,12 @@ class DummyAgent(CaptureAgent):
     """
 
     def check_start(self):
-        global first_to_act, first_to_initialise, experience, past_gameState, previous_agent
-        if first_to_act is not None and past_gameState is not None:
+        global first_to_act, first_to_initialise, state, maze_distancer
+        if first_to_act is not None:
             first_to_act = None
             first_to_initialise = None
-            experience = None
-            past_gameState = None
+            state = None
+            maze_distancer = None
 
 
     def registerInitialState(self, gameState):
@@ -104,11 +100,15 @@ class DummyAgent(CaptureAgent):
 
         CaptureAgent.registerInitialState(self, gameState)
         if maze_distancer is None:
-            maze_distancer = deepcopy(self.distancer)
+            # maze_distancer = deepcopy(self.distancer)
+            maze_distancer = distanceCalculator.Distancer(gameState.data.layout)
+            maze_distancer.getMazeDistances()
         self.distancer._distances = None
         self.check_start()
 
-        if first_to_initialise == None: first_to_initialise = self.index
+        if first_to_initialise == None:
+            ppo_network.load_weights()
+            first_to_initialise = self.index
 
         if self.index == first_to_initialise:
             global state
@@ -119,26 +119,20 @@ class DummyAgent(CaptureAgent):
             self.agent_index = 1
 
     def chooseAction(self, gameState):
-        global first_to_act, experience, past_gameState, illegal_reward, maze_distancer, previous_agent
+        global first_to_act, maze_distancer, state
 
         if first_to_act is None: first_to_act = self.index
 
-        if self.index == first_to_act:
-            state.update_state(gameState)
-        else:
-            opponent_pacman = {}
-            for i in self.getOpponents(gameState):
-                opponent_pacman[i] = gameState.getAgentState(i).isPacman
-            state.update_last_enemy_positions(gameState.getAgentDistances(), opponent_pacman)
+        state.update_state(gameState)
 
         legal_actions = gameState.getLegalActions(self.index)
-        legal_actions = [actions_idx[a] for a in legal_actions]
         current_state = state.get_dense_state_representation(self.index)
-        current_action, illegal_reward = ppo_network.compute_action(current_state, legal_actions)
-        experience = (current_state, current_action, False)
-        past_gameState = gameState.deepCopy()
-        previous_agent = self.index
-
-        if illegal_reward is not None:
-            return "Stop"
-        return idx_actions[current_action]
+        current_action, _ = ppo_network.compute_action(current_state)
+        if self.red:
+            if idx_actions[current_action] not in legal_actions:
+                return "Stop"
+            return idx_actions[current_action]
+        else:
+            if flip[idx_actions[current_action]] not in legal_actions:
+                return "Stop"
+            return flip[idx_actions[current_action]]
