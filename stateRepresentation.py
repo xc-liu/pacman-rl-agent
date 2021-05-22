@@ -1,3 +1,4 @@
+import math
 import time
 
 import numpy as np
@@ -594,7 +595,8 @@ class stateRepresentation:
 
         return reward
 
-    def get_positional_reward(self, new_state, old_state, distancer, mode="individual", agent_idx=None):
+    def get_positional_reward(self, new_state, old_state, distancer, mode="individual", agent_idx=None,
+                              annealing_start=None, current_timestep=None):
         if mode == "individual":
             assert agent_idx is not None
             indices = [agent_idx]
@@ -629,9 +631,19 @@ class stateRepresentation:
 
             if agent_state.numCarrying == 0:
                 dist_diff = (prev_min_dist - min_dist)
-                agent_reward += dist_diff * (37 * prev_min_dist ** 2 + 1975 * prev_min_dist + 242200) / 12650000
+                go_to_food_reward = dist_diff * (37 * prev_min_dist ** 2 + 1975 * prev_min_dist + 242200) / 12650000
+                if annealing_start is None:
+                    agent_reward += go_to_food_reward
+                else:
+                    assert current_timestep is not None and current_timestep >= annealing_start
+                    agent_reward += go_to_food_reward * 0.9997 ** (current_timestep - annealing_start)
             if agent_state_pos == prev_agent_state_pos:
-                agent_reward -= 1
+                if annealing_start is None:
+                    agent_reward -= 1
+                else:
+                    assert current_timestep is not None and current_timestep >= annealing_start
+                    agent_reward -= 0.99977 ** (current_timestep - annealing_start)
+
             # prev_agent_distances = old_state.getAgentDistances()
             # agent_distances = new_state.getAgentDistances()
             # for enemy_idx in self.agent.getOpponents(old_state):
