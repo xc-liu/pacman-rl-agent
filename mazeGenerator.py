@@ -126,14 +126,16 @@ def make_with_prison(room, depth, gaps=1, vert=True, min_width=1, gapfactor=0.5)
   proll = random.random()
   if proll < 0.5:
     p = 1
-  elif proll < 0.7:
-    p = 0
-  elif proll < 0.9:
-    p = 2
   else:
-    p = 3
-
-  p = 0
+    p = 0
+  # elif proll < 0.7:
+  #   p = 0
+  # elif proll < 0.9:
+  #   p = 2
+  # else:
+  #   p = 3
+  #
+  # p = 3
 
   add_r, add_c = room.anchor
   # print(p)
@@ -223,8 +225,6 @@ def add_pacman_stuff(maze, max_food=60, max_capsules=4, toskip=0):
     if num_added == 0: break
     if depth >= max_depth: break
 
-
-
   # maze.grid[maze.r-2][1] = '3'
   # maze.grid[maze.r-3][1] = '1'
   # maze.grid[1][maze.c-2] = '4'
@@ -254,32 +254,33 @@ def add_pacman_stuff(maze, max_food=60, max_capsules=4, toskip=0):
       total_food += 2
 
   agents_to_create = ['3', '1']
-  new_pos = [random.randint(0, 16), random.randint(0, 16)]
+  new_pos = [random.randint(0, 12), random.randint(0, 12)]
   for a in agents_to_create:
     while maze.grid[new_pos[0]][new_pos[1]] != ' ':
-      new_pos = [random.randint(0, 16), random.randint(0, 16)]
+      new_pos = [random.randint(0, 12), random.randint(0, 12)]
     maze.grid[new_pos[0]][new_pos[1]] = a
 
 
   agents_to_create = ['4', '2']
-  new_pos = [random.randint(0, 16), random.randint(18, 33)]
+  new_pos = [random.randint(0, 12), random.randint(14, 25)]
   for a in agents_to_create:
     while maze.grid[new_pos[0]][new_pos[1]] != ' ':
-      new_pos = [random.randint(0, 16), random.randint(18, 33)]
+      new_pos = [random.randint(0, 12), random.randint(14, 25)]
     maze.grid[new_pos[0]][new_pos[1]] = a
 
 
-MAX_DIFFERENT_MAZES = 10000
+MAX_DIFFERENT_MAZES = 1000000
 
 def generateMaze(seed = None):
   if not seed:
     seed = random.randint(1,MAX_DIFFERENT_MAZES)
   random.seed(seed)
-  maze = Maze(16,16)
+  maze = Maze(12,12)
   gapfactor = min(0.65,random.gauss(0.5,0.1))
-  skip = make_with_prison(maze, depth=0, gaps=3, vert=True, min_width=1, gapfactor=gapfactor)
+  # skip = make_with_prison(maze, depth=0, gaps=3, vert=True, min_width=1, gapfactor=gapfactor)
+  skip = make_with_prison(maze, depth=0, gaps=6, vert=True, min_width=3, gapfactor=gapfactor)
   maze.to_map()
-  add_pacman_stuff(maze, 2*(maze.r*maze.c/20), 4, skip)
+  add_pacman_stuff(maze, 2*(maze.r*maze.c/20), 2, skip)
   return str(maze)
 
 if __name__ == '__main__':

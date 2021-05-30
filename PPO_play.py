@@ -125,6 +125,8 @@ class DummyAgent(CaptureAgent):
 
         state.update_state(gameState)
 
+        # time.sleep(0.01)
+
         legal_actions = gameState.getLegalActions(self.index)
         current_state = state.get_dense_state_representation(self.index)
         current_action, _ = ppo_network.compute_action(current_state)

@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 from score_keeper import get_timesteps
+symmetric = False
 
 
 def kalman(v, r, q):
@@ -411,15 +412,17 @@ class stateRepresentation:
         for p in possible_enemy_pos:
             possible_distances.append(self.agent.distancer.getDistance(agent_pos, p))
         best_enemy_pos = possible_enemy_pos[find_nearest(possible_distances, corrected_dist)]
-        if (self.red and enemy_pacman) or (not self.red and enemy_pacman):
-            best_enemy_pos = (int(min(best_enemy_pos[0], len(self.digital_state[0][0]) / 2)), best_enemy_pos[1])
-            while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
-                best_enemy_pos = (best_enemy_pos[0] - 1, best_enemy_pos[1])
 
-        if (self.red and not enemy_pacman) or (not self.red and not enemy_pacman):
-            best_enemy_pos = (int(max(best_enemy_pos[0], int(len(self.digital_state[0][0]) / 2 + 1))), best_enemy_pos[1])
-            while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
-                best_enemy_pos = (best_enemy_pos[0] + 1, best_enemy_pos[1])
+        if symmetric:
+            if (self.red and enemy_pacman) or (not self.red and enemy_pacman):
+                best_enemy_pos = (int(min(best_enemy_pos[0], len(self.digital_state[0][0]) / 2)), best_enemy_pos[1])
+                while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
+                    best_enemy_pos = (best_enemy_pos[0] - 1, best_enemy_pos[1])
+
+            if (self.red and not enemy_pacman) or (not self.red and not enemy_pacman):
+                best_enemy_pos = (int(max(best_enemy_pos[0], int(len(self.digital_state[0][0]) / 2 + 1))), best_enemy_pos[1])
+                while self.digital_state[0][best_enemy_pos[1]][len(self.digital_state[0][0]) - 1 - best_enemy_pos[0]] == 1:
+                    best_enemy_pos = (best_enemy_pos[0] + 1, best_enemy_pos[1])
 
         self.last_enemy_pos[enemy_idx] = best_enemy_pos
         return self.last_enemy_pos[enemy_idx]
@@ -452,23 +455,28 @@ class stateRepresentation:
                 scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]]
             else:
                 players = split_players(player)
-                try:
-                    player_layer[loc[0]][loc[1]] = min(sum([player_idx_map[p] for p in players]), 4)
-                    for p in players:
-                        food_carrying[info_idx_map[p]] = self.digital_state[4][loc[0]][loc[1]] / 2
-                        scared_timer[info_idx_map[p]] = self.digital_state[5][loc[0]][loc[1]] / 2
-                except:
-                    print(player)
-                    print(players)
-                    print(player_layer)
-                    exit()
+                for p in players:
+                    player_pos[info_idx_map[p] * 2: info_idx_map[p] * 2 + 2] = loc
+                    food_carrying[info_idx_map[p]] = self.digital_state[4][loc[0]][loc[1]] / 2 / (
+                                self.initial_food / 2)
+                    scared_timer[info_idx_map[p]] = self.digital_state[5][loc[0]][loc[1]] / 2 / self.total_time
 
-        dense_state = np.zeros(shape=self.digital_state[0].shape)
-        dense_state += -self.digital_state[0]               # wall: -1
-        dense_state += player_layer                         # players: 1, 2, 4, 4 (1+2=3, 4+4=4)
-        dense_state += 5 * self.digital_state[1]            # food: 5
-        dense_state += 6 * self.digital_state[2]            # capsule:
-        return list(dense_state.flatten()) + food_carrying + scared_timer + [self.score, self.time_left]
+        objective_dense = np.zeros(shape=(dense_state.shape[0] * 2, dense_state.shape[1] * 2))
+        height = len(dense_state)
+        width = len(dense_state[0])
+        mid_height = int(len(objective_dense) / 2)
+        mid_width = int(len(objective_dense[0]) / 2)
+        objective_dense[mid_height - player_pos[0]:mid_height + height - player_pos[0], mid_width - player_pos[1]:mid_width + width - player_pos[1]] = dense_state
+
+        # pacman
+        pacman = [0 for _ in range(4)]
+        for p in range(4):
+            agent_state = self.gameState.getAgentState(p)
+            if agent_state.isPacman:
+                pacman[info_original_idx_map[p]] = 1
+        other_player_pos = [player_pos[i] - player_pos[i % 2] for i in range(2, 8)]
+        return list(objective_dense.flatten()) + other_player_pos + pacman + food_carrying + scared_timer + \
+               [self.score / (self.initial_food / 2) * 10, self.time_left / self.total_time]
 
     def reshape_state(self, state):
         # reshape the state into 3 * 32 * 32
@@ -562,9 +570,9 @@ class stateRepresentation:
             prev_agent_state = old_state.getAgentState(idx)
             agent_state = new_state.getAgentState(idx)
             if (agent_state.numReturned - prev_agent_state.numReturned) <= 0:
-                agent_reward += (agent_state.numCarrying - prev_agent_state.numCarrying) / self.initial_food
+                agent_reward += ((agent_state.numCarrying - prev_agent_state.numCarrying) / self.initial_food)*0.8
 
-            agent_reward += (agent_state.numReturned - prev_agent_state.numReturned) / self.initial_food
+            agent_reward += ((agent_state.numReturned - prev_agent_state.numReturned) / self.initial_food)*1.2
 
             powered = False
             enemy_food = 0
@@ -588,9 +596,9 @@ class stateRepresentation:
                 agent_reward -= 0.2
 
             if powered:
-                agent_reward += 0.2 / len(indices)
+                agent_reward += 0.2 / len(indices) / 10
             if agent_state.scaredTimer > 0 and prev_agent_state.scaredTimer == 0:
-                agent_reward -= 0.2 / len(indices)
+                agent_reward -= 0.2 / len(indices) / 10
 
             reward = agent_reward
 
@@ -642,10 +650,10 @@ class stateRepresentation:
                     agent_reward += go_to_food_reward * 0.9997 ** (current_timestep - annealing_start)
             if agent_state_pos == prev_agent_state_pos:
                 if annealing_start is None:
-                    agent_reward -= 1
+                    agent_reward -= 0.5
                 else:
                     assert current_timestep is not None and current_timestep >= annealing_start
-                    agent_reward -= 0.99977 ** (current_timestep - annealing_start)
+                    agent_reward -= 0.5 * 0.99977 ** (current_timestep - annealing_start)
 
             # prev_agent_distances = old_state.getAgentDistances()
             # agent_distances = new_state.getAgentDistances()

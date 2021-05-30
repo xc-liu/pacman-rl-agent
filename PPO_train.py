@@ -38,7 +38,6 @@ past_gameState = None
 previous_agent = None
 game_length = None
 
-
 def createTeam(firstIndex, secondIndex, isRed,
                first='DummyAgent', second='DummyAgent'):
     global first_index, second_index
@@ -75,20 +74,19 @@ class DummyAgent(CaptureAgent):
     """
 
     def check_start(self):
-        global first_to_act, first_to_initialise, experience, past_gameState, previous_agent, state, maze_distancer, game_length, state
-        if first_to_act is not None and past_gameState is not None:
-            first_to_act = None
+        global first_to_initialise, experience, past_gameState, previous_agent, state, maze_distancer, game_length, state
+        if experience is not None and past_gameState is not None:
             first_to_initialise = None
             experience = experience[:-1]
             end_reward = return_score()
             end_game_reward = end_reward if self.red else -end_reward
 
-            time_left_previous_game = past_gameState.data.timeleft / game_length
+            # time_left_previous_game = past_gameState.data.timeleft / game_length
 
-            if end_game_reward>0:
-                end_game_reward += 5 + time_left_previous_game*10
-            else:
-                end_game_reward -= (5 + time_left_previous_game*10)
+            # if end_game_reward > 0:
+            #     end_game_reward += 1 + time_left_previous_game*10
+            # elif end_game_reward < 0:
+            #     end_game_reward -= (1 + time_left_previous_game*10)
 
             ppo_network.last_experience_reward(end_game_reward)
             experience = (*experience, True, end_game_reward, state.get_dense_state_representation(previous_agent))
@@ -129,7 +127,7 @@ class DummyAgent(CaptureAgent):
 
         if game_length is None: game_length = gameState.data.timeleft
 
-        if first_to_initialise == None: first_to_initialise = self.index
+        if first_to_initialise is None: first_to_initialise = self.index
 
         if self.index == first_to_initialise:
             global state
@@ -139,19 +137,22 @@ class DummyAgent(CaptureAgent):
         else:
             self.agent_index = 1
 
-    def chooseAction(self, gameState):
-        global first_to_act, experience, past_gameState, illegal_reward, maze_distancer, previous_agent, state
 
-        if first_to_act is None: first_to_act = self.index
+    def chooseAction(self, gameState):
+        global experience, past_gameState, illegal_reward, maze_distancer, previous_agent, state
 
         if experience is not None:
-            reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=previous_agent)
-            positional_reward = state.get_positional_reward(gameState, past_gameState, maze_distancer, mode='individual', agent_idx=previous_agent)
-            reward += positional_reward
-            if illegal_reward is not None:
-                reward -= illegal_reward
+            # reward = state.get_reward(gameState, past_gameState, mode='individual', agent_idx=previous_agent)
+            # positional_reward = state.get_positional_reward(gameState, past_gameState, maze_distancer, mode='individual', agent_idx=previous_agent)
+            # reward += positional_reward
+            # if illegal_reward is not None:
+            #     reward -= illegal_reward
+            state.update_state(gameState)
+            reward = 0
             experience = (*experience, reward, state.get_dense_state_representation(previous_agent))
             ppo_network.store_experience(experience)
+
+        if experience is None: state.update_state(gameState)
 
         legal_actions = gameState.getLegalActions(self.index)
         legal_actions = [actions_idx[a] for a in legal_actions]
@@ -160,7 +161,7 @@ class DummyAgent(CaptureAgent):
         experience = (current_state, current_action, False)
         past_gameState = gameState.deepCopy()
         previous_agent = self.index
-
+        # time.sleep(0.01)
         if illegal_reward is not None:
             return "Stop"
         return idx_actions[current_action]

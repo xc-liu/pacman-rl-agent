@@ -30,7 +30,7 @@ class Actor_network(nn.Module):
 class PPO:
     def __init__(self, training_agent=False):
         self.action_dim = 5
-        self.state_dim = 622
+        self.state_dim = 1476
         self.training_agent = training_agent
         self.actor_network = Actor_network(self.state_dim, self.action_dim)
 
@@ -38,9 +38,9 @@ class PPO:
         try:
             file = 'neural-network_2.pth'
             if self.training_agent:
-                agent_options = os.listdir('past_agents_2')
+                agent_options = os.listdir('self-play-agents')
                 file = random.choice(agent_options)
-                file = 'past_agents_2/' + file
+                file = 'self-play-agents/' + file
             checkpoint = torch.load(file)
             self.actor_network.load_state_dict(checkpoint['network_actor_state_dict'])
             # print("Loaded previous model")

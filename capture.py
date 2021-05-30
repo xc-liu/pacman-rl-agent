@@ -1061,8 +1061,8 @@ def runGames( layouts, agents, display, length, numGames, record, numTraining, r
         scores_by_map[current_layout][1] += 1
       scores_by_map[current_layout][2] += g.state.data.score
     except Exception as e:
-      print(layouts_names[i])
       traceback.print_exc()
+      exit()
 
 
   for s in scores_by_map:
