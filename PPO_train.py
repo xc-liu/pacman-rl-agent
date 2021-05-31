@@ -147,12 +147,12 @@ class DummyAgent(CaptureAgent):
             # reward += positional_reward
             # if illegal_reward is not None:
             #     reward -= illegal_reward
-            state.update_state(gameState)
+            state.update_state(gameState, self.index)
             reward = 0
             experience = (*experience, reward, state.get_dense_state_representation(previous_agent))
             ppo_network.store_experience(experience)
 
-        if experience is None: state.update_state(gameState)
+        if experience is None: state.update_state(gameState, self.index)
 
         legal_actions = gameState.getLegalActions(self.index)
         legal_actions = [actions_idx[a] for a in legal_actions]

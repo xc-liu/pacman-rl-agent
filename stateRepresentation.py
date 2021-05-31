@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 from score_keeper import get_timesteps
-symmetric = False
+symmetric = True
 
 
 def kalman(v, r, q):
@@ -186,7 +186,7 @@ class stateRepresentation:
                                 next_pos[(pos[1], pos[0])].append((p[1], p[0]))
         return next_pos
 
-    def update_state(self, gameState):
+    def update_state(self, gameState, acting_agent):
         self.gameState = gameState
         self.score = self.agent.getScore(gameState)
         self.time_left = gameState.data.timeleft
@@ -330,7 +330,10 @@ class stateRepresentation:
 
                     if not changed:
                         noisy_dist = np.clip(self.gameState.getAgentDistances()[original_idx], a_min=5, a_max=None)
-                        pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos)
+                        if acting_agent == self.index:
+                            pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos)
+                        else:
+                            pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos, 'second')
             else:
                 if not self.red:
                     pos = [width - 1 - pos[0], height - 1 - pos[1]]
