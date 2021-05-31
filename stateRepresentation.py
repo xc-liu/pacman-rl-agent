@@ -100,6 +100,8 @@ class stateRepresentation:
         self.next_pos2 = self.initialise_next_pos(steps=2)
         self.score = agent.getScore(gameState)
         self.time_left = gameState.data.timeleft
+        self.total_time = gameState.data.timeleft
+        self.flipping_action = {0: 1, 1: 0, 2: 3, 3: 2}
 
 
     def initialise_digital_state(self, gameState):
@@ -439,23 +441,30 @@ class stateRepresentation:
         return digital_state, self.score, self.time_left
 
     def get_dense_state_representation(self, agent_idx):
-        player_layer = np.zeros(shape=self.digital_state[3].shape)
+        dense_state = np.zeros(shape=self.digital_state[0].shape)
+        dense_state += -self.digital_state[0]  # wall: -1
+        dense_state += self.digital_state[1]  # food: 1
+        dense_state += 2 * self.digital_state[2]  # capsule: 2
+
         player_loc = np.nonzero(self.digital_state[3])
         player_loc = [(player_loc[0][i], player_loc[1][i]) for i in range(len(player_loc[0]))]
         indices = self.indices.copy()
         indices.discard(agent_idx)
         agent_idx2 = indices.pop()
-        player_idx_map = {int(self.corresponding_index[agent_idx]): 1, int(self.corresponding_index[agent_idx2]): 2, 2: 4, 4: 4}
-        info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2, 4: 3}
+        enemy_indices = self.agent.getOpponents(self.gameState)
+        info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2,
+                        4: 3}
+        info_original_idx_map = {agent_idx: 0, agent_idx2: 1, int(min(enemy_indices)): 2, int(max(enemy_indices)): 3}
 
+        player_pos = [0 for _ in range(4 * 2)]
         food_carrying = [0, 0, 0, 0]
         scared_timer = [0, 0, 0, 0]
         for loc in player_loc:
             player = int(self.digital_state[3][loc[0]][loc[1]])
             if player < 10:
-                player_layer[loc[0]][loc[1]] = player_idx_map[player]
-                food_carrying[info_idx_map[player]] = self.digital_state[4][loc[0]][loc[1]]
-                scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]]
+                player_pos[info_idx_map[player] * 2: info_idx_map[player] * 2 + 2] = loc
+                food_carrying[info_idx_map[player]] = self.digital_state[4][loc[0]][loc[1]] / (self.initial_food / 2)
+                scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]] / self.total_time
             else:
                 players = split_players(player)
                 for p in players:
