@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 from score_keeper import get_timesteps
-symmetric = False
+symmetric = True
 
 
 def kalman(v, r, q):
@@ -100,6 +100,8 @@ class stateRepresentation:
         self.next_pos2 = self.initialise_next_pos(steps=2)
         self.score = agent.getScore(gameState)
         self.time_left = gameState.data.timeleft
+        self.total_time = gameState.data.timeleft
+        self.flipping_action = {0: 1, 1: 0, 2: 3, 3: 2}
 
 
     def initialise_digital_state(self, gameState):
@@ -186,7 +188,7 @@ class stateRepresentation:
                                 next_pos[(pos[1], pos[0])].append((p[1], p[0]))
         return next_pos
 
-    def update_state(self, gameState):
+    def update_state(self, gameState, acting_agent):
         self.gameState = gameState
         self.score = self.agent.getScore(gameState)
         self.time_left = gameState.data.timeleft
@@ -330,12 +332,13 @@ class stateRepresentation:
 
                     if not changed:
                         noisy_dist = np.clip(self.gameState.getAgentDistances()[original_idx], a_min=5, a_max=None)
-                        pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos)
+                        if acting_agent == self.index:
+                            pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos)
+                        else:
+                            pos = self.computeOpponentPosition(idx, pacman, noisy_dist, myPos, 'second')
             else:
                 if not self.red:
                     pos = [width - 1 - pos[0], height - 1 - pos[1]]
-
-
 
             # if self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] == 0:
             #     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = idx
@@ -346,8 +349,6 @@ class stateRepresentation:
             else:
                 self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])] = add_players(
                     self.digital_state[3][height - 1 - int(pos[1])][int(pos[0])], idx)
-
-
 
             # digital_state[4][height - int(pos[1])][int(pos[0])] = actions_idx[direction]
             self.digital_state[4][height - 1 - int(pos[1])][int(pos[0])] += food_carrying if pacman else 0
@@ -436,23 +437,36 @@ class stateRepresentation:
         return digital_state, self.score, self.time_left
 
     def get_dense_state_representation(self, agent_idx):
-        player_layer = np.zeros(shape=self.digital_state[3].shape)
+        dense_state = np.zeros(shape=self.digital_state[0].shape)
+        dense_state += -self.digital_state[0]  # wall: -1
+        width = self.digital_state.shape[2]
+        if self.red:
+            dense_state[:, :int(width / 2)] += self.digital_state[1, :, :int(width / 2)]  # own food: 1
+            dense_state[:, int(width / 2):] += 2 * self.digital_state[1, :, int(width / 2):]  # their food: 2
+        else:
+            dense_state[:, :int(width / 2)] += 2 * self.digital_state[1, :, :int(width / 2)]  # their food: 2
+            dense_state[:, int(width / 2):] += self.digital_state[1, :, int(width / 2):]  # own food: 1
+        dense_state += 3 * self.digital_state[2]  # capsule: 3
+
         player_loc = np.nonzero(self.digital_state[3])
         player_loc = [(player_loc[0][i], player_loc[1][i]) for i in range(len(player_loc[0]))]
         indices = self.indices.copy()
         indices.discard(agent_idx)
         agent_idx2 = indices.pop()
-        player_idx_map = {int(self.corresponding_index[agent_idx]): 1, int(self.corresponding_index[agent_idx2]): 2, 2: 4, 4: 4}
-        info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2, 4: 3}
+        enemy_indices = self.agent.getOpponents(self.gameState)
+        info_idx_map = {int(self.corresponding_index[agent_idx]): 0, int(self.corresponding_index[agent_idx2]): 1, 2: 2,
+                        4: 3}
+        info_original_idx_map = {agent_idx: 0, agent_idx2: 1, int(min(enemy_indices)): 2, int(max(enemy_indices)): 3}
 
+        player_pos = [0 for _ in range(4 * 2)]
         food_carrying = [0, 0, 0, 0]
         scared_timer = [0, 0, 0, 0]
         for loc in player_loc:
             player = int(self.digital_state[3][loc[0]][loc[1]])
             if player < 10:
-                player_layer[loc[0]][loc[1]] = player_idx_map[player]
-                food_carrying[info_idx_map[player]] = self.digital_state[4][loc[0]][loc[1]]
-                scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]]
+                player_pos[info_idx_map[player] * 2: info_idx_map[player] * 2 + 2] = loc
+                food_carrying[info_idx_map[player]] = self.digital_state[4][loc[0]][loc[1]] / (self.initial_food / 2)
+                scared_timer[info_idx_map[player]] = self.digital_state[5][loc[0]][loc[1]] / self.total_time
             else:
                 players = split_players(player)
                 for p in players:
@@ -461,21 +475,14 @@ class stateRepresentation:
                                 self.initial_food / 2)
                     scared_timer[info_idx_map[p]] = self.digital_state[5][loc[0]][loc[1]] / 2 / self.total_time
 
-        objective_dense = np.zeros(shape=(dense_state.shape[0] * 2, dense_state.shape[1] * 2))
-        height = len(dense_state)
-        width = len(dense_state[0])
-        mid_height = int(len(objective_dense) / 2)
-        mid_width = int(len(objective_dense[0]) / 2)
-        objective_dense[mid_height - player_pos[0]:mid_height + height - player_pos[0], mid_width - player_pos[1]:mid_width + width - player_pos[1]] = dense_state
-
         # pacman
         pacman = [0 for _ in range(4)]
         for p in range(4):
             agent_state = self.gameState.getAgentState(p)
             if agent_state.isPacman:
                 pacman[info_original_idx_map[p]] = 1
-        other_player_pos = [player_pos[i] - player_pos[i % 2] for i in range(2, 8)]
-        return list(objective_dense.flatten()) + other_player_pos + pacman + food_carrying + scared_timer + \
+
+        return list(dense_state.flatten()) + player_pos + pacman + food_carrying + scared_timer + \
                [self.score / (self.initial_food / 2) * 10, self.time_left / self.total_time]
 
     def reshape_state(self, state):
