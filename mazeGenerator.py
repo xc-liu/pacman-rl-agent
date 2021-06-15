@@ -254,19 +254,22 @@ def add_pacman_stuff(maze, max_food=60, max_capsules=4, toskip=0):
       total_food += 2
 
   agents_to_create = ['3', '1']
-  new_pos = [random.randint(0, 12), random.randint(0, 12)]
+  agent_opponent = {'3': '4', '1': '2'}
+  new_pos = [random.randint(0, 12), random.randint(0, 6)]
   for a in agents_to_create:
     while maze.grid[new_pos[0]][new_pos[1]] != ' ':
-      new_pos = [random.randint(0, 12), random.randint(0, 12)]
+      new_pos = [random.randint(0, 12), random.randint(0, 6)]
     maze.grid[new_pos[0]][new_pos[1]] = a
+    maze.grid[maze.r-new_pos[0] -1][maze.c-new_pos[1] -1] = agent_opponent[a]
 
 
-  agents_to_create = ['4', '2']
-  new_pos = [random.randint(0, 12), random.randint(14, 25)]
-  for a in agents_to_create:
-    while maze.grid[new_pos[0]][new_pos[1]] != ' ':
-      new_pos = [random.randint(0, 12), random.randint(14, 25)]
-    maze.grid[new_pos[0]][new_pos[1]] = a
+  #
+  # agents_to_create = ['4', '2']
+  # new_pos = [random.randint(0, 12), random.randint(20, 25)]
+  # for a in agents_to_create:
+  #   while maze.grid[new_pos[0]][new_pos[1]] != ' ':
+  #     new_pos = [random.randint(0, 12), random.randint(20, 25)]
+  #   maze.grid[new_pos[0]][new_pos[1]] = a
 
 
 MAX_DIFFERENT_MAZES = 1000000

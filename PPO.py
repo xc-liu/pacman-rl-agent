@@ -222,20 +222,21 @@ class PPO:
 
     def visualize_network(self, dist, original):
         state = convert_state_to_tensor(original)
-        dist = list(dist.detach().cpu().numpy())
-        action = dist.index(max(dist))
-        if len(self.buffer) % 10 == 0:
+        dist = dist.detach().cpu().numpy()[0]
+        posibilities = [i for i in range(0, 5)]
+        action = np.random.choice(posibilities, p=dist)
+        if len(self.buffer) % 200 == 0 and len(self.buffer)>1:
             ig = IntegratedGradients(self.actor_network)
 
             test_input_tensor = state.requires_grad_()
-            attr, delta = ig.attribute(test_input_tensor, target=action, return_convergence_delta=True)
+            attr, delta = ig.attribute(test_input_tensor, target=1, return_convergence_delta=True)
             attr = attr.detach().cpu().numpy()[0]
 
-            print(dist.index(max(dist)))
             names = [str(original[i]) for i in range(len(attr))]
-            # names1 = ["act1", "act2", "act3", "act4", "pac", "food1", "food2", "food3", "food4", "sc1", "sc2", "sc3", "sc4", "score", "time"]
+            names1 = ["p1x", "p1y", "p2x", "p2y", "p3x", "p3y", "pac1", "pac2", "pac3", "pac4", "food1", "food2", "food3", "food4", "sc1", "sc2", "sc3", "sc4", "score", "time"]
 
             visualize_importances(names, attr)
+            visualize_importances(names1, attr[-20:])
 
         return action
 
@@ -266,8 +267,8 @@ class PPO:
             self.rewards_games.append(self.reward_count)
             self.reward_count = 0
             if len(self.buffer) >= self.exp_to_learn:
-                self.mean_rewards = np.mean(self.rewards_games[-50:])
-                if len(self.steps_per_game) >= 50 or self.initial_frequency < 100: self.mean_rewards_games.append(
+                self.mean_rewards = np.mean(self.rewards_games[-100:])
+                if len(self.steps_per_game) >= 100 or self.initial_frequency < 100: self.mean_rewards_games.append(
                     self.mean_rewards)
                 print("Game - %d, Reward - %.2f " % (len(self.steps_per_game), self.mean_rewards), end='\r')
                 # print("Game - %d, Reward - %.2f " % (len(self.steps_per_game), self.mean_rewards))
@@ -278,7 +279,7 @@ class PPO:
                 self.save_weights()
                 plt.plot(self.mean_rewards_games)
                 plt.title("Mean reward is %.2f" % np.mean(self.mean_rewards_games))
-                plt.savefig('plot_%d'%int(self.training_samples / self.exp_to_learn))
+                plt.savefig('plots/plot_%d'%int(self.training_samples / self.exp_to_learn))
                 # plt.show()
 
     def compute_target_value(self, rewards):

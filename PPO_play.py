@@ -123,9 +123,7 @@ class DummyAgent(CaptureAgent):
 
         if first_to_act is None: first_to_act = self.index
 
-        state.update_state(gameState)
-
-        # time.sleep(0.01)
+        state.update_state(gameState, self.index)
 
         legal_actions = gameState.getLegalActions(self.index)
         current_state = state.get_dense_state_representation(self.index)
