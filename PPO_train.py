@@ -20,7 +20,7 @@ from copy import deepcopy
 #################
 # Team creation #
 #################
-from stateRepresentation import stateRepresentation
+from new_stateRepresentation import stateRepresentation
 
 first_index = None  # Index of first player
 second_index = None  # Index of second player

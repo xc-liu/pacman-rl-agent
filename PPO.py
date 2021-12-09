@@ -123,7 +123,8 @@ class PPO:
         self.ppo_epochs = 10
         self.minibatch_size = 256
         self.action_dim = 5
-        self.state_dim = 1476
+        # self.state_dim = 1476
+        self.state_dim = 386
         self.buffer_size = 15000
         self.lr_actor = 1e-4
         self.lr_critic = 3e-4
