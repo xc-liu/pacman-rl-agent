@@ -1,0 +1,1 @@
+Folder for locating agents to play against
