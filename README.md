@@ -23,13 +23,14 @@
 * [Contributors](#contributors)
 * [Usage](#usage)
 * [Contributing](#contributing)
-* [License](#license)
+
+[comment]: <> (* [License]&#40;#license&#41;)
 
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This project is oriented towards the use of RL in the <a href="https://github.com/cshelton/pacman-ctf">pacman-ctf</a> environment, which consists on playing a capture the flag game in pacman, by controlling two agents.
+This project is oriented towards the use of RL in the <a href="https://github.com/cshelton/pacman-ctf">pacman-ctf</a> environment, which consists on playing a capture the flag game in pacman, by controlling two agents. Our research findings are [here](report/Report.pdf).
 
 ### Built With
 
@@ -88,9 +89,10 @@ For more details about the game mechanics refer to <a href="https://github.com/c
 
 Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**.
 
-<!-- LICENSE -->
-## License
+[comment]: <> (<!-- LICENSE -->)
 
-Distributed under the GPL License. See `LICENSE` for more information.
+[comment]: <> (## License)
+
+[comment]: <> (Distributed under the GPL License. See `LICENSE` for more information.)
 
 
